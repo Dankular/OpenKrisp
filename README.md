@@ -70,10 +70,13 @@ mic or call audio (48 kHz)
 
 ## Status
 
-Early. The enhancer, VAD wrapper, decimator and gain stage have each been checked against a reference or by tests; the details and numbers are in
+Early. On six noisy test clips the enhancer lifts SI-SDR from 0.5 to 13.7 dB and PESQ from 1.24 to 3.06; the gain-control stage currently makes some metrics worse
+(see [docs/eval.md](docs/eval.md)). The enhancer, VAD wrapper, decimator and gain stage have each been checked against a reference or by tests; the details and numbers are in
 [docs/measurements.md](docs/measurements.md). Open questions are listed there too, including how to drive the gain stage from TEN VAD's probabilities.
 
-Planned next: soft gate and lookahead, an evaluation set run, live audio I/O, a virtual microphone, the Windows control app, and a local notes and action-items feature.
+Also built but not yet proven on hardware: a soft gate with lookahead, a full pipeline, and a live-audio worker with a cpal device layer (compile-checked only, never run on a real device).
+
+Planned next: diagnosing the gain stage, trying live audio on Windows, a virtual microphone, the Windows control app, and a local notes and action-items feature.
 
 ## Licenses
 
