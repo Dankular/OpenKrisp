@@ -173,7 +173,8 @@ impl StreamEnhancer {
             Tensor::from_shape(&[self.state.len()], &self.state)?.into(),
         ))?;
         let spec_e = result[0].try_as_plain_ram()?.as_slice::<f32>()?;
-        self.state.copy_from_slice(result[1].try_as_plain_ram()?.as_slice::<f32>()?);
+        self.state
+            .copy_from_slice(result[1].try_as_plain_ram()?.as_slice::<f32>()?);
 
         for (k, c) in self.spec.iter_mut().enumerate() {
             *c = Complex::new(spec_e[2 * k] as f64, spec_e[2 * k + 1] as f64);

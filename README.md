@@ -1,74 +1,82 @@
-# OpenKrisp (voiceclean)
+# OpenKrisp
 
-Local, on-device voice/noise cleanup on CPU, written in Rust. Pipeline target:
-DPDFNet (enhancement) -> TEN VAD (voice activity) -> AGC2-style gain -> limiter, later exposed as a virtual mic.
+OpenKrisp is an open-source, on-device voice cleanup tool in the spirit of Krisp. It removes background noise from your
+microphone, and from the audio you hear on a call, using a neural speech enhancer running on the CPU. Nothing leaves your machine.
 
-Status: early. File-based processing only; there is no real-time audio I/O or virtual mic yet.
+It is written in Rust. A Windows control app (WinUI 3) is planned; see [Status](#status).
 
-## Workspace
+## What it does today
 
-| crate | what it is |
-|---|---|
-| `crates/dpdf` | Streaming DPDFNet enhancer (`StreamEnhancer`), a port of `dpdfnet.StreamEnhancer` on tract-onnx |
-| `crates/tenvad` | Safe FFI wrapper over the TEN VAD C library (`libten_vad`) |
-| `crates/resample` | Streaming 48 -> 16 kHz decimator (Kaiser-windowed-sinc, 97 taps) for the VAD side-path |
-| `crates/agc` | AGC2 chain built from `sonora-agc2` components, driven by an external speech probability |
-| `crates/voiceclean` | CLI (`voiceclean <model.onnx> <model_rate> <in.wav> <out.wav>`) and the `agc_demo` example |
-| `tools/` | Python reference scripts used to check parity (`ref_dpdf.py`, `ref_vad.py`, `parity.py`) |
+- **Noise removal.** [DPDFNet](https://huggingface.co/Ceva-IP/DPDFNet) (a small streaming speech-enhancement model) runs through a pure-Rust ONNX runtime.
+  The Rust port matches the reference Python implementation to within rounding error.
+- **Two independent lanes.** One for your microphone ("cancel my noise") and one for incoming audio ("cancel others' noise"), each switchable on and off
+  at any time without a glitch in timing.
+- **Level control.** An automatic gain stage and limiter (built from the WebRTC-derived [`sonora-agc2`](https://crates.io/crates/sonora-agc2) parts) driven by the
+  [TEN VAD](https://github.com/TEN-framework/ten-vad) voice detector.
+- **A file tool** to run the enhancer over a WAV file from the command line.
 
-## Build
+## What it does not do yet
+
+- No live microphone or speaker capture, and no virtual microphone device. Today it processes files and blocks of samples handed to it.
+- No separation of other people's voices ("voice isolation"). The setting exists in the engine, but nothing implements it yet.
+- No meeting notes, transcription or action items yet. A local speech-to-text and local LLM summarizer are planned, with none chosen or tested so far.
+- No Windows app yet. Nothing in this repo has been built or run on Windows.
+
+## Try it
+
+You need Rust 1.91 or newer, and the model file `dpdfnet2_48khz_hr.onnx` from the
+[`Ceva-IP/DPDFNet`](https://huggingface.co/Ceva-IP/DPDFNet) repository (in its `onnx/` folder).
 
 ```
 cargo build --release
+./target/release/voiceclean dpdfnet2_48khz_hr.onnx 48000 noisy48k.wav clean.wav
 ```
 
-Needs Rust >= 1.91 (sonora-agc2). The DPDFNet model is not in the repo; download
-`dpdfnet2_48khz_hr.onnx` from `Ceva-IP/DPDFNet` (`onnx/` folder) on Hugging Face.
+The input must be a mono WAV already at 48 kHz (16 or 32-bit float PCM). Output is 32-bit float WAV.
+
+### Level control demo (optional)
+
+This needs the TEN VAD shared library, which is not included here because its license has extra conditions
+(read the LICENSE in the [ten-vad repo](https://github.com/TEN-framework/ten-vad) before you ship anything). Download the library, then:
 
 ```
-./target/release/voiceclean dpdfnet2_48khz_hr.onnx 48000 in48.wav out.wav
-```
-
-Input must already be at the model's sample rate (no resampling yet).
-
-### TEN VAD (optional `vad` feature)
-
-`libten_vad` is not vendored: its license adds conditions beyond Apache-2.0 (see the LICENSE in
-https://github.com/TEN-framework/ten-vad; read it before deploying). Get the library yourself, then:
-
-```
-export TEN_VAD_LIB_DIR=/path/to/ten-vad/lib/Linux/x64   # dir containing libten_vad.so
+export TEN_VAD_LIB_DIR=/path/to/ten-vad/lib/Linux/x64     # folder containing libten_vad.so
 export LD_LIBRARY_PATH=$TEN_VAD_LIB_DIR
-cargo run --release -p voiceclean --features vad --example agc_demo -- enhanced48k.wav out.wav [dump16k.wav]
+cargo run --release -p voiceclean --features vad --example agc_demo -- enhanced48k.wav out.wav
 ```
 
-On Linux the `.so` also needs `libc++1` and `libc++abi1`.
+On Linux the library also needs `libc++1` and `libc++abi1`.
 
-## Verified so far (Linux x86-64, 4-core sandbox, 2026-10-27)
+## How it fits together
 
-- **DPDFNet port:** vs dpdfnet 0.6.0 `StreamEnhancer` on a 129 s clip (DPDFNet_EvalSet `arabic_office_snr5`, resampled to 48 kHz):
-  same length, max abs diff 8.9e-7, SNR 127 dB. RTF 0.324 (Python/onnxruntime 0.226). Only the 48 kHz HR model has been run.
-- **TEN VAD wrapper:** per-frame output is byte-identical to the upstream Python wrapper on the same 16 kHz clip at hop 256 and hop 160.
-  At hop 160 the first call returns `(-1.0, -1)`; at hop 256 it returned a normal decision.
-- **AGC wiring:** mirrors `GainController2::process` from `sonora` 0.2.0 (read from source). The noise-aware gain cap is part of
-  `AdaptiveDigitalGainController`. Unit tests: +26.2 dB gain over a -80 dBFS floor; 0.0 dB over a -45 dBFS floor
-  (`max_output_noise_level_dbfs -50` minus noise, clamped at 0), as the code predicts.
-- **Decimator:** passband (200 Hz-6 kHz) within 0.2 dB, response below -80 dB from 9 kHz up (computed from the taps), 7.5 kHz is the -6 dB point,
-  group delay 48 input samples (1 ms), output independent of chunking. Against scipy `resample_poly` on the same enhanced audio, TEN VAD flags agree on
-  99.2% of frames (mean |dprob| 0.048, max 0.33; scipy's output is delay-compensated, ours is not, so part of that is the 1 ms offset).
-- **VAD on the enhanced signal (129 s clip, `agc_demo`):** TEN VAD flags 31.4% of frames at threshold 0.5 and 12.5% reach probability 0.95
-  (on the noisy source it was 34.4% / 3.2%). Probability deciles are bimodal (17.8% in 0-0.1, 40.1% in 0.1-0.2, 19.1% in 0.9-1.0).
+```
+mic or call audio (48 kHz)
+   |
+   +--> DPDFNet enhancer ---------------------------> cleaned audio
+   |                                                       |
+   +--> 3:1 decimator --> TEN VAD --> speech probability --+--> gain control --> limiter
+        (16 kHz, VAD only)
+```
 
-## AGC speech probability: what is and is not known
+| crate | role |
+|---|---|
+| `crates/dpdf` | Streaming DPDFNet enhancer |
+| `crates/engine` | The two lanes, on/off controls and a C API for a UI to call |
+| `crates/tenvad` | Safe Rust wrapper over the TEN VAD C library |
+| `crates/resample` | 48 to 16 kHz decimator for feeding the VAD |
+| `crates/agc` | Gain control and limiter |
+| `crates/voiceclean` | Command-line tool and demo |
+| `tools/` | Python scripts used to check results against reference implementations |
 
-AGC2 treats frames as speech only at probability >= 0.95 (`VAD_CONFIDENCE_THRESHOLD`, tuned for sonora's RNN VAD).
-- The small gain on the test clip (mean ~2 dB) is explained by the loud input: final frame speech level -25.8 dBFS + headroom 19.0 dB gives
-  target gain = -5 - (-25.8 + 19.0) = +1.8 dB (formula from `adaptive_digital_gain_controller.rs`).
-- Same clip attenuated by 30 dB: with the raw probability the gain rises 18 -> 29 -> 30.5 dB (thirds of the clip, 6 dB/s slew limit);
-  feeding the TEN VAD flag (1/0) instead gives 32-34 dB and a lower speech-level estimate (-63 vs -54 dBFS) because lower-confidence frames count as speech.
-- Which mapping is better is **not determined**: it needs a listening test or a reference. `agc_demo` has the knobs
-  (`AGC_DEMO_ATTEN_DB`, `AGC_DEMO_MAP=flag`).
+## Status
 
-## Not done yet
+Early. The enhancer, VAD wrapper, decimator and gain stage have each been checked against a reference or by tests; the details and numbers are in
+[docs/measurements.md](docs/measurements.md). Open questions are listed there too, including how to drive the gain stage from TEN VAD's probabilities.
 
-Soft gate and lookahead, evaluation set, real-time I/O, virtual mic (target OS undecided), AEC.
+Planned next: soft gate and lookahead, an evaluation set run, live audio I/O, a virtual microphone, the Windows control app, and a local notes and action-items feature.
+
+## Licenses
+
+This repository does not have a license file yet, so the code's license is not decided (the `license` field in the Cargo manifests is a placeholder).
+Dependencies and models carry their own licenses: `sonora-agc2` is BSD-3-Clause, TEN VAD has extra conditions (see above), and the DPDFNet model's
+license should be checked before you redistribute it.

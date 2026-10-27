@@ -13,10 +13,10 @@ use sonora_agc2::common::{
     ADJACENT_SPEECH_FRAMES_THRESHOLD, MAXIMAL_NUMBER_OF_SAMPLES_PER_CHANNEL,
     SATURATION_PROTECTOR_INITIAL_HEADROOM_DB, SUB_FRAMES_IN_FRAME, float_s16_to_dbfs,
 };
-pub use sonora_agc2::speech_level_estimator::AdaptiveDigitalConfig;
 use sonora_agc2::limiter::Limiter;
 use sonora_agc2::noise_level_estimator::NoiseLevelEstimator;
 use sonora_agc2::saturation_protector::SaturationProtector;
+pub use sonora_agc2::speech_level_estimator::AdaptiveDigitalConfig;
 use sonora_agc2::speech_level_estimator::SpeechLevelEstimator;
 
 const S16: f32 = 32768.0;
@@ -75,7 +75,11 @@ impl Agc2 {
     /// `frame_len()` samples. `speech_probability` is clamped to [0, 1].
     pub fn process(&mut self, frame: &mut [f32], speech_probability: f32) -> Result<FrameStats> {
         if frame.len() != self.frame_len {
-            bail!("frame has {} samples, expected {}", frame.len(), self.frame_len);
+            bail!(
+                "frame has {} samples, expected {}",
+                frame.len(),
+                self.frame_len
+            );
         }
         let prob = speech_probability.clamp(0.0, 1.0);
         for x in frame.iter_mut() {
@@ -165,14 +169,17 @@ mod tests {
                     .map(|_| {
                         phase += 1;
                         if speech {
-                            sine_amp * (2.0 * std::f32::consts::PI * 1000.0 * phase as f32 / 48000.0).sin()
+                            sine_amp
+                                * (2.0 * std::f32::consts::PI * 1000.0 * phase as f32 / 48000.0)
+                                    .sin()
                         } else {
                             noise_amp * rng.next()
                         }
                     })
                     .collect();
                 let inp = rms(&frame);
-                agc.process(&mut frame, if speech { 1.0 } else { 0.0 }).unwrap();
+                agc.process(&mut frame, if speech { 1.0 } else { 0.0 })
+                    .unwrap();
                 if speech && s + 2 >= seconds && f >= 50 {
                     in_sq += inp * inp;
                     out_sq += rms(&frame).powi(2);
@@ -180,7 +187,10 @@ mod tests {
                 }
             }
         }
-        (db((in_sq / cnt as f32).sqrt()), db((out_sq / cnt as f32).sqrt()))
+        (
+            db((in_sq / cnt as f32).sqrt()),
+            db((out_sq / cnt as f32).sqrt()),
+        )
     }
 
     #[test]
@@ -193,7 +203,10 @@ mod tests {
     #[test]
     fn quiet_speech_over_quiet_floor_is_boosted() {
         let (i, o) = run(-45.0, -80.0, 40);
-        eprintln!("quiet floor: in {i:.1} dB, out {o:.1} dB, gain {:.1} dB", o - i);
+        eprintln!(
+            "quiet floor: in {i:.1} dB, out {o:.1} dB, gain {:.1} dB",
+            o - i
+        );
         assert!(o - i > 10.0);
     }
 
@@ -201,7 +214,10 @@ mod tests {
     fn noisy_floor_caps_the_gain() {
         // Noise at -45 dBFS: max_output_noise -50 dBFS allows no gain at all (cap = max(-5, 0) = 0 dB).
         let (i, o) = run(-30.0, -45.0, 40);
-        eprintln!("noisy floor: in {i:.1} dB, out {o:.1} dB, gain {:.1} dB", o - i);
+        eprintln!(
+            "noisy floor: in {i:.1} dB, out {o:.1} dB, gain {:.1} dB",
+            o - i
+        );
         assert!(o - i < 1.0);
     }
 }

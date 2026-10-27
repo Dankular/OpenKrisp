@@ -1,0 +1,15 @@
+[package]
+name = "openkrisp-engine"
+description = "Control + processing engine with a C ABI for the OpenKrisp UI (two lanes: my mic, incoming audio)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "openkrisp_engine"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+anyhow.workspace = true
+dpdf = { path = "../dpdf" }

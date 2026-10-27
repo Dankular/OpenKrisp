@@ -58,7 +58,11 @@ impl Default for Decimate3 {
 
 impl Decimate3 {
     pub fn new() -> Self {
-        Self { h: design(), buf: vec![0.0; TAPS - 1], next: TAPS - 1 }
+        Self {
+            h: design(),
+            buf: vec![0.0; TAPS - 1],
+            next: TAPS - 1,
+        }
     }
 
     /// Input samples of group delay.
@@ -86,7 +90,9 @@ mod tests {
     use super::*;
 
     fn tone(freq: f32, n: usize) -> Vec<f32> {
-        (0..n).map(|i| (2.0 * std::f64::consts::PI * freq as f64 * i as f64 / 48000.0).sin() as f32).collect()
+        (0..n)
+            .map(|i| (2.0 * std::f64::consts::PI * freq as f64 * i as f64 / 48000.0).sin() as f32)
+            .collect()
     }
 
     fn rms_db(x: &[f32]) -> f32 {
@@ -123,7 +129,11 @@ mod tests {
 
     #[test]
     fn chunking_does_not_change_output() {
-        let x: Vec<f32> = tone(1234.0, 9999).iter().zip(tone(5500.0, 9999)).map(|(a, b)| a + 0.3 * b).collect();
+        let x: Vec<f32> = tone(1234.0, 9999)
+            .iter()
+            .zip(tone(5500.0, 9999))
+            .map(|(a, b)| a + 0.3 * b)
+            .collect();
         let whole = run(&x);
         let mut d = Decimate3::new();
         let mut parts = Vec::new();
@@ -139,7 +149,12 @@ mod tests {
         let mut x = vec![0.0f32; 4800];
         x[2400] = 1.0;
         let y = run(&x);
-        let peak = y.iter().enumerate().max_by(|a, b| a.1.abs().total_cmp(&b.1.abs())).unwrap().0;
+        let peak = y
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.abs().total_cmp(&b.1.abs()))
+            .unwrap()
+            .0;
         // impulse at 2400 + delay 48 = 2448 -> output index 816
         assert_eq!(peak, (2400 + Decimate3::new().delay_input_samples()) / 3);
     }
@@ -150,7 +165,9 @@ mod response {
     #[test]
     fn stopband_from_9khz_is_below_minus_80_db() {
         let h = super::design();
-        for f in [7000.0f64, 7500.0, 8000.0, 9000.0, 12000.0, 16000.0, 20000.0, 23000.0] {
+        for f in [
+            7000.0f64, 7500.0, 8000.0, 9000.0, 12000.0, 16000.0, 20000.0, 23000.0,
+        ] {
             let (mut re, mut im) = (0.0f64, 0.0f64);
             for (n, &c) in h.iter().enumerate() {
                 let a = -2.0 * std::f64::consts::PI * f / 48000.0 * n as f64;

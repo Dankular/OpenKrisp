@@ -37,7 +37,10 @@ impl TenVad {
         if unsafe { ten_vad_create(&mut handle, hop_size, threshold) } != 0 || handle.is_null() {
             bail!("ten_vad_create failed (hop {hop_size}, threshold {threshold})");
         }
-        Ok(Self { handle, hop: hop_size })
+        Ok(Self {
+            handle,
+            hop: hop_size,
+        })
     }
 
     pub fn hop(&self) -> usize {
@@ -52,7 +55,13 @@ impl TenVad {
         let (mut prob, mut flag) = (0.0f32, 0i32);
         // SAFETY: handle came from ten_vad_create; frame/out pointers are valid for the call.
         let rc = unsafe {
-            ten_vad_process(self.handle, frame.as_ptr(), frame.len(), &mut prob, &mut flag)
+            ten_vad_process(
+                self.handle,
+                frame.as_ptr(),
+                frame.len(),
+                &mut prob,
+                &mut flag,
+            )
         };
         if rc != 0 {
             bail!("ten_vad_process failed");
@@ -70,5 +79,7 @@ impl Drop for TenVad {
 
 pub fn version() -> String {
     // SAFETY: returns a static NUL-terminated string per ten_vad.h.
-    unsafe { CStr::from_ptr(ten_vad_get_version()) }.to_string_lossy().into_owned()
+    unsafe { CStr::from_ptr(ten_vad_get_version()) }
+        .to_string_lossy()
+        .into_owned()
 }

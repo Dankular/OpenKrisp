@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/agc", "crates/dpdf", "crates/resample", "crates/tenvad", "crates/voiceclean"]
+members = ["crates/agc", "crates/dpdf", "crates/engine", "crates/gate", "crates/resample", "crates/tenvad", "crates/voiceclean"]
 
 [workspace.package]
 version = "0.1.0"

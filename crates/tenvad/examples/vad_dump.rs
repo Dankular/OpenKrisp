@@ -3,7 +3,9 @@ use anyhow::{Result, bail};
 
 fn main() -> Result<()> {
     let a: Vec<String> = std::env::args().skip(1).collect();
-    let [path, hop, thr] = a.as_slice() else { bail!("usage: vad_dump <in16k.wav> <hop> <threshold>") };
+    let [path, hop, thr] = a.as_slice() else {
+        bail!("usage: vad_dump <in16k.wav> <hop> <threshold>")
+    };
     let hop: usize = hop.parse()?;
     let mut r = hound::WavReader::open(path)?;
     if r.spec().sample_rate != 16000 || r.spec().channels != 1 || r.spec().bits_per_sample != 16 {
