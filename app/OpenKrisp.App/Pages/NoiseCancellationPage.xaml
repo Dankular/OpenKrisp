@@ -1,0 +1,57 @@
+<Page
+    x:Class="OpenKrisp.App.Pages.NoiseCancellationPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer>
+        <StackPanel Spacing="16" Padding="32" MaxWidth="680" HorizontalAlignment="Left">
+
+            <TextBlock Text="Noise cancellation" Style="{StaticResource TitleTextBlockStyle}" />
+
+            <InfoBar
+                Severity="Warning"
+                Title="Audio engine unavailable"
+                Message="{x:Bind Vm.UnavailableReason}"
+                IsOpen="{x:Bind Vm.IsUnavailable}"
+                IsClosable="False" />
+
+            <StackPanel Spacing="2">
+                <ToggleSwitch
+                    Header="Cancel my noise"
+                    OnContent="On" OffContent="Off"
+                    IsEnabled="{x:Bind Vm.IsAvailable}"
+                    IsOn="{x:Bind Vm.MyNoiseCancel, Mode=TwoWay}" />
+                <TextBlock Text="Removes background noise from your microphone." Opacity="0.7" TextWrapping="Wrap" />
+            </StackPanel>
+
+            <StackPanel Spacing="2">
+                <ToggleSwitch
+                    Header="Cancel others' noise"
+                    OnContent="On" OffContent="Off"
+                    IsEnabled="{x:Bind Vm.IsAvailable}"
+                    IsOn="{x:Bind Vm.OthersNoiseCancel, Mode=TwoWay}" />
+                <TextBlock Text="Removes background noise from the audio you hear on calls." Opacity="0.7" TextWrapping="Wrap" />
+            </StackPanel>
+
+            <StackPanel Spacing="6">
+                <TextBlock Text="Voice isolation" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <RadioButtons
+                    IsEnabled="{x:Bind Vm.IsAvailable}"
+                    SelectedIndex="{x:Bind Vm.VoiceIsolationIndex, Mode=TwoWay}"
+                    MaxColumns="2">
+                    <x:String>Off</x:String>
+                    <x:String>Auto</x:String>
+                </RadioButtons>
+                <TextBlock x:Name="IsolationDescription" Opacity="0.7" TextWrapping="Wrap" />
+                <InfoBar
+                    Severity="Informational"
+                    Message="{x:Bind Vm.IsolationNote, Mode=OneWay}"
+                    IsOpen="{x:Bind Vm.HasIsolationNote, Mode=OneWay}"
+                    IsClosable="False" />
+            </StackPanel>
+
+            <TextBlock Text="{x:Bind Vm.StatusText, Mode=OneWay}" Opacity="0.7" TextWrapping="Wrap" />
+            <TextBlock Text="{x:Bind Vm.Error, Mode=OneWay}" Foreground="{ThemeResource SystemFillColorCriticalBrush}" TextWrapping="Wrap" />
+        </StackPanel>
+    </ScrollViewer>
+</Page>

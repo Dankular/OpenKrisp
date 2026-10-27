@@ -14,7 +14,10 @@ typedef struct VcStatus {
     uint8_t mic_nc;
     uint8_t speaker_nc;
     uint8_t voice_isolation;        /* 0 off, 1 auto (stored setting) */
-    uint8_t voice_isolation_active; /* always 0: not implemented */
+    uint8_t voice_isolation_active; /* 1 only if Auto is requested and at least one capability below runs */
+    uint8_t echo_cancel_active;     /* always 0 today: not implemented */
+    uint8_t nearby_voice_removal_active; /* always 0 today: not implemented */
+    uint8_t reserved[2];
     uint32_t sample_rate;
     uint32_t block;                 /* samples per block; output lags input by one block */
     uint64_t mic_samples;

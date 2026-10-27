@@ -7,7 +7,9 @@
 //! reset and pre-rolled with the previous block; the first block it emits is discarded and the bypassed block
 //! is used for it, then enhanced blocks follow.
 //!
-//! Voice isolation is stored and reported but NOT implemented: `voice_isolation_active` is always false.
+//! Voice isolation (Off/Auto) is stored and reported but NOT implemented. Auto is meant to add echo cancellation and
+//! nearby-voice removal on top of noise removal; `echo_cancel_active` and `nearby_voice_removal_active` report which of
+//! those actually run, and today both are false.
 //! Audio device I/O is not part of this crate; the host feeds blocks to `process`.
 
 mod ffi;
@@ -146,9 +148,20 @@ impl Engine {
         }
     }
 
-    /// Always false: no isolation model or gate exists yet.
-    pub fn voice_isolation_active(&self) -> bool {
+    /// Voice isolation "Auto" is meant to remove echo and nearby voices on top of standard noise removal.
+    /// Neither exists yet, so both capabilities report false.
+    pub fn echo_cancel_active(&self) -> bool {
         false
+    }
+
+    pub fn nearby_voice_removal_active(&self) -> bool {
+        false
+    }
+
+    /// True only if the requested isolation is actually being applied (never, until a capability exists).
+    pub fn voice_isolation_active(&self) -> bool {
+        self.voice_isolation() == VoiceIsolation::Auto
+            && (self.echo_cancel_active() || self.nearby_voice_removal_active())
     }
 
     pub fn samples_processed(&self, lane: Lane) -> u64 {
@@ -263,5 +276,6 @@ mod tests {
         e.set_voice_isolation(VoiceIsolation::Auto);
         assert_eq!(e.voice_isolation(), VoiceIsolation::Auto);
         assert!(!e.voice_isolation_active());
+        assert!(!e.echo_cancel_active() && !e.nearby_voice_removal_active());
     }
 }

@@ -1,0 +1,19 @@
+<Window
+    x:Class="OpenKrisp.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="OpenKrisp">
+
+    <NavigationView
+        x:Name="Nav"
+        PaneDisplayMode="Top"
+        IsBackButtonVisible="Collapsed"
+        IsSettingsVisible="False"
+        SelectionChanged="Nav_SelectionChanged">
+        <NavigationView.MenuItems>
+            <NavigationViewItem Content="Noise cancellation" Tag="noise" Icon="Microphone" />
+            <NavigationViewItem Content="Note taker" Tag="notes" Icon="Document" />
+        </NavigationView.MenuItems>
+        <Frame x:Name="ContentFrame" />
+    </NavigationView>
+</Window>

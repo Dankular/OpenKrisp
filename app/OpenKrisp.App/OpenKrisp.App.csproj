@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- WinUI 3, unpackaged, self-contained Windows App SDK. Windows only: this project cannot be built on Linux/macOS.
+       NOT built or run yet (the dev sandbox has no Windows). See ../README.md. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>OpenKrisp.App</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260921001" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OpenKrisp.Core\OpenKrisp.Core.csproj" />
+  </ItemGroup>
+
+  <!-- The Rust engine DLL (built on Windows with: cargo build, release profile, package openkrisp-engine) is copied next to the exe. -->
+  <ItemGroup>
+    <None Include="..\..\target\release\openkrisp_engine.dll" Condition="Exists('..\..\target\release\openkrisp_engine.dll')">
+      <Link>openkrisp_engine.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

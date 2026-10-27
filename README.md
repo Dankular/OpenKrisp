@@ -18,9 +18,11 @@ It is written in Rust. A Windows control app (WinUI 3) is planned; see [Status](
 ## What it does not do yet
 
 - No live microphone or speaker capture, and no virtual microphone device. Today it processes files and blocks of samples handed to it.
-- No separation of other people's voices ("voice isolation"). The setting exists in the engine, but nothing implements it yet.
+- No voice isolation. "Auto" is meant to remove nearby voices and echo on top of standard noise removal; the setting exists in the engine and the app, but neither
+  part is implemented. Echo removal looks feasible (a Rust port of WebRTC's echo canceller, `sonora-aec3`, exists and the incoming-audio lane could be its reference;
+  its API has not been read yet). For nearby-voice removal no model has been chosen.
 - No meeting notes, transcription or action items yet. A local speech-to-text and local LLM summarizer are planned, with none chosen or tested so far.
-- No Windows app yet. Nothing in this repo has been built or run on Windows.
+- The Windows app (WinUI 3, in `app/`) is written but has never been built or run: nothing in this repo has been built or run on Windows. Its non-UI logic is tested on Linux.
 
 ## Try it
 
@@ -66,6 +68,7 @@ mic or call audio (48 kHz)
 | `crates/resample` | 48 to 16 kHz decimator for feeding the VAD |
 | `crates/agc` | Gain control and limiter |
 | `crates/virtualmic` | Sender for the MicyWMD virtual microphone driver (Windows; compile-checked only) |
+| `app/` | Windows control app: Noise cancellation and Note taker tabs (see [app/README.md](app/README.md)) |
 | `crates/voiceclean` | Command-line tool and demo |
 | `tools/` | Python scripts used to check results against reference implementations |
 
