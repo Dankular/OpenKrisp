@@ -2,9 +2,17 @@
 
 | project | what | status |
 |---|---|---|
-| `OpenKrisp.Core` | Engine bindings (P/Invoke to the Rust `openkrisp_engine`), the two tab view models, the action-item store. Plain `net8.0`, no UI framework. | Built and tested on Linux (24 tests) |
+| `OpenKrisp.Core` | Engine bindings (P/Invoke to the Rust `openkrisp_engine`), the two tab view models, the action-item store. Plain `net8.0`, no UI framework. | Built and tested on Linux (25 tests) |
 | `OpenKrisp.Core.Tests` | xunit tests, including real calls into the Rust library | Passing on Linux |
 | `OpenKrisp.App` | WinUI 3 shell: "Noise cancellation" and "Note taker" tabs | **Not built or run.** Windows only; the dev sandbox has no Windows. XAML is checked for well-formedness only |
+
+## Look
+
+Light theme only (it does not follow Windows dark mode), violet accent, a soft lavender background with white rounded cards, bold navy headings, and the Inter font
+(bundled; falls back to the Windows UI font if it cannot load). The Note taker follows the reference designs: a Transcription card, a Transcript card, Action Items
+(square checkboxes, done items struck through and greyed, a date chip and a coloured assignee avatar per item) and a Key Points card. Transcription, the transcript and
+key points are shown as empty states because nothing records or summarises yet. The styling was written from reference images without being able to see it
+rendered; expect to adjust spacing and colours once it has been looked at on Windows.
 
 ## What the app does today
 

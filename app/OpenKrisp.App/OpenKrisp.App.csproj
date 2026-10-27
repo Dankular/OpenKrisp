@@ -25,6 +25,16 @@
     <ProjectReference Include="..\OpenKrisp.Core\OpenKrisp.Core.csproj" />
   </ItemGroup>
 
+  <!-- Inter (variable), SIL Open Font License 1.1: see Assets/Fonts/Inter-OFL.txt -->
+  <ItemGroup>
+    <Content Include="Assets\Fonts\InterVariable.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <None Include="Assets\Fonts\Inter-OFL.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
   <!-- The Rust engine DLL (built on Windows with: cargo build, release profile, package openkrisp-engine) is copied next to the exe. -->
   <ItemGroup>
     <None Include="..\..\target\release\openkrisp_engine.dll" Condition="Exists('..\..\target\release\openkrisp_engine.dll')">

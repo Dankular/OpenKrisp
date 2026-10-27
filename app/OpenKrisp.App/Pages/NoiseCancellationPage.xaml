@@ -5,9 +5,9 @@
     xmlns:local="using:OpenKrisp.App.Pages">
 
     <ScrollViewer>
-        <StackPanel Spacing="16" Padding="32" MaxWidth="680" HorizontalAlignment="Left">
+        <StackPanel Spacing="20" Padding="32,8,32,40" MaxWidth="900" HorizontalAlignment="Left">
 
-            <TextBlock Text="Noise cancellation" Style="{StaticResource TitleTextBlockStyle}" />
+            <TextBlock Text="Noise cancellation" Style="{StaticResource PageTitleStyle}" />
 
             <InfoBar
                 Severity="Warning"
@@ -16,95 +16,123 @@
                 IsOpen="{x:Bind Vm.IsUnavailable}"
                 IsClosable="False" />
 
-            <StackPanel Spacing="2">
-                <ToggleSwitch
-                    Header="Cancel my noise"
-                    OnContent="On" OffContent="Off"
-                    IsEnabled="{x:Bind Vm.IsAvailable}"
-                    IsOn="{x:Bind Vm.MyNoiseCancel, Mode=TwoWay}" />
-                <TextBlock Text="Removes background noise from your microphone." Opacity="0.7" TextWrapping="Wrap" />
-            </StackPanel>
+            <!-- The two switches -->
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel Spacing="20">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="3">
+                            <TextBlock Text="Cancel my noise" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock Text="Removes background noise from your microphone." Style="{StaticResource MutedTextStyle}" />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="1" OnContent="" OffContent="" VerticalAlignment="Center"
+                                      AutomationProperties.Name="Cancel my noise"
+                                      IsEnabled="{x:Bind Vm.IsAvailable}"
+                                      IsOn="{x:Bind Vm.MyNoiseCancel, Mode=TwoWay}" />
+                    </Grid>
 
-            <StackPanel Spacing="2">
-                <ToggleSwitch
-                    Header="Cancel others' noise"
-                    OnContent="On" OffContent="Off"
-                    IsEnabled="{x:Bind Vm.IsAvailable}"
-                    IsOn="{x:Bind Vm.OthersNoiseCancel, Mode=TwoWay}" />
-                <TextBlock Text="Removes background noise from the audio you hear on calls." Opacity="0.7" TextWrapping="Wrap" />
-            </StackPanel>
+                    <Rectangle Height="1" Fill="{StaticResource CardBorderBrush}" />
 
-            <StackPanel Spacing="6">
-                <TextBlock Text="Voice isolation" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                <RadioButtons
-                    IsEnabled="{x:Bind Vm.IsAvailable}"
-                    SelectedIndex="{x:Bind Vm.VoiceIsolationIndex, Mode=TwoWay}"
-                    MaxColumns="2">
-                    <x:String>Off</x:String>
-                    <x:String>Auto</x:String>
-                </RadioButtons>
-                <TextBlock x:Name="IsolationDescription" Opacity="0.7" TextWrapping="Wrap" />
-                <InfoBar
-                    Severity="Informational"
-                    Message="{x:Bind Vm.IsolationNote, Mode=OneWay}"
-                    IsOpen="{x:Bind Vm.HasIsolationNote, Mode=OneWay}"
-                    IsClosable="False" />
-            </StackPanel>
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="3">
+                            <TextBlock Text="Cancel others' noise" Style="{StaticResource RowTitleStyle}" />
+                            <TextBlock Text="Removes background noise from the audio you hear on calls." Style="{StaticResource MutedTextStyle}" />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="1" OnContent="" OffContent="" VerticalAlignment="Center"
+                                      AutomationProperties.Name="Cancel others' noise"
+                                      IsEnabled="{x:Bind Vm.IsAvailable}"
+                                      IsOn="{x:Bind Vm.OthersNoiseCancel, Mode=TwoWay}" />
+                    </Grid>
 
-            <TextBlock Text="{x:Bind Vm.StatusText, Mode=OneWay}" Opacity="0.7" TextWrapping="Wrap" />
-            <TextBlock Text="{x:Bind Vm.Error, Mode=OneWay}" Foreground="{ThemeResource SystemFillColorCriticalBrush}" TextWrapping="Wrap" />
+                    <TextBlock Text="{x:Bind Vm.StatusText, Mode=OneWay}" Style="{StaticResource MutedTextStyle}" />
+                    <TextBlock Text="{x:Bind Vm.Error, Mode=OneWay}" Style="{StaticResource ErrorTextStyle}" />
+                </StackPanel>
+            </Border>
 
-            <!-- Live audio routing -->
-            <TextBlock Text="Audio routing" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,16,0,0" />
+            <!-- Voice isolation -->
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Voice isolation" Style="{StaticResource CardTitleStyle}" />
+                    <TextBlock x:Name="IsolationDescription" Style="{StaticResource MutedTextStyle}" />
+                    <RadioButtons
+                        IsEnabled="{x:Bind Vm.IsAvailable}"
+                        SelectedIndex="{x:Bind Vm.VoiceIsolationIndex, Mode=TwoWay}"
+                        MaxColumns="2">
+                        <x:String>Off</x:String>
+                        <x:String>Auto</x:String>
+                    </RadioButtons>
+                    <InfoBar
+                        Severity="Informational"
+                        Message="{x:Bind Vm.IsolationNote, Mode=OneWay}"
+                        IsOpen="{x:Bind Vm.HasIsolationNote, Mode=OneWay}"
+                        IsClosable="False" />
+                </StackPanel>
+            </Border>
 
-            <ComboBox Header="Microphone" MinWidth="360"
-                      IsEnabled="{x:Bind Routing.IsAvailable}"
-                      ItemsSource="{x:Bind Routing.Inputs, Mode=OneWay}" DisplayMemberPath="Display"
-                      SelectedItem="{x:Bind Routing.MicInput, Mode=TwoWay}" />
+            <!-- Audio routing -->
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Audio routing" Style="{StaticResource CardTitleStyle}" />
 
-            <ComboBox Header="Send the cleaned microphone to" MinWidth="360"
-                      IsEnabled="{x:Bind Routing.IsAvailable}"
-                      SelectedIndex="{x:Bind Routing.MicSinkIndex, Mode=TwoWay}">
-                <x:String>Nowhere (microphone lane off)</x:String>
-                <x:String>OpenKrisp virtual microphone (MicyAudio driver)</x:String>
-                <x:String>A playback device</x:String>
-            </ComboBox>
+                    <ComboBox Header="Microphone" MinWidth="380"
+                              IsEnabled="{x:Bind Routing.IsAvailable}"
+                              ItemsSource="{x:Bind Routing.Inputs, Mode=OneWay}" DisplayMemberPath="Display"
+                              SelectedItem="{x:Bind Routing.MicInput, Mode=TwoWay}" />
 
-            <ComboBox Header="Playback device for the microphone" MinWidth="360"
-                      Visibility="{x:Bind local:NoiseCancellationPage.VisibleWhen(Routing.ShowMicSinkDevice), Mode=OneWay}"
-                      ItemsSource="{x:Bind Routing.Outputs, Mode=OneWay}" DisplayMemberPath="Display"
-                      SelectedItem="{x:Bind Routing.MicSinkDevice, Mode=TwoWay}" />
+                    <ComboBox Header="Send the cleaned microphone to" MinWidth="380"
+                              IsEnabled="{x:Bind Routing.IsAvailable}"
+                              SelectedIndex="{x:Bind Routing.MicSinkIndex, Mode=TwoWay}">
+                        <x:String>Nowhere (microphone lane off)</x:String>
+                        <x:String>OpenKrisp virtual microphone (MicyAudio driver)</x:String>
+                        <x:String>A playback device</x:String>
+                    </ComboBox>
 
-            <ComboBox Header="Incoming audio: capture from" MinWidth="360"
-                      IsEnabled="{x:Bind Routing.IsAvailable}"
-                      ItemsSource="{x:Bind Routing.IncomingSources, Mode=OneWay}" DisplayMemberPath="Display"
-                      SelectedItem="{x:Bind Routing.IncomingSource, Mode=TwoWay}" />
+                    <ComboBox Header="Playback device for the microphone" MinWidth="380"
+                              Visibility="{x:Bind local:NoiseCancellationPage.VisibleWhen(Routing.ShowMicSinkDevice), Mode=OneWay}"
+                              ItemsSource="{x:Bind Routing.Outputs, Mode=OneWay}" DisplayMemberPath="Display"
+                              SelectedItem="{x:Bind Routing.MicSinkDevice, Mode=TwoWay}" />
 
-            <ComboBox Header="Play the cleaned incoming audio on" MinWidth="360"
-                      IsEnabled="{x:Bind Routing.IsAvailable}"
-                      ItemsSource="{x:Bind Routing.Outputs, Mode=OneWay}" DisplayMemberPath="Display"
-                      SelectedItem="{x:Bind Routing.IncomingOutput, Mode=TwoWay}" />
+                    <Rectangle Height="1" Fill="{StaticResource CardBorderBrush}" />
 
-            <TextBlock x:Name="IncomingHelp" Opacity="0.7" TextWrapping="Wrap" />
+                    <ComboBox Header="Incoming audio: capture from" MinWidth="380"
+                              IsEnabled="{x:Bind Routing.IsAvailable}"
+                              ItemsSource="{x:Bind Routing.IncomingSources, Mode=OneWay}" DisplayMemberPath="Display"
+                              SelectedItem="{x:Bind Routing.IncomingSource, Mode=TwoWay}" />
 
-            <Expander Header="Advanced">
-                <ComboBox Header="Sample format written to the virtual microphone driver" MinWidth="360"
-                          SelectedIndex="{x:Bind Routing.MicyFormatIndex, Mode=TwoWay}">
-                    <x:String>32-bit integer</x:String>
-                    <x:String>32-bit float</x:String>
-                    <x:String>16-bit integer</x:String>
-                </ComboBox>
-            </Expander>
+                    <ComboBox Header="Play the cleaned incoming audio on" MinWidth="380"
+                              IsEnabled="{x:Bind Routing.IsAvailable}"
+                              ItemsSource="{x:Bind Routing.Outputs, Mode=OneWay}" DisplayMemberPath="Display"
+                              SelectedItem="{x:Bind Routing.IncomingOutput, Mode=TwoWay}" />
 
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Content="Start" Style="{StaticResource AccentButtonStyle}"
-                        IsEnabled="{x:Bind Routing.CanStart, Mode=OneWay}" Click="Start_Click" />
-                <Button Content="Stop" IsEnabled="{x:Bind Routing.IsRunning, Mode=OneWay}" Click="Stop_Click" />
-                <Button Content="Refresh devices" Click="RefreshDevices_Click" />
-            </StackPanel>
+                    <TextBlock x:Name="IncomingHelp" Style="{StaticResource MutedTextStyle}" />
 
-            <TextBlock Text="{x:Bind Routing.StatusText, Mode=OneWay}" Opacity="0.7" TextWrapping="Wrap" />
-            <TextBlock Text="{x:Bind Routing.Error, Mode=OneWay}" Foreground="{ThemeResource SystemFillColorCriticalBrush}" TextWrapping="Wrap" />
+                    <Expander Header="Advanced">
+                        <ComboBox Header="Sample format written to the virtual microphone driver" MinWidth="380"
+                                  SelectedIndex="{x:Bind Routing.MicyFormatIndex, Mode=TwoWay}">
+                            <x:String>32-bit integer</x:String>
+                            <x:String>32-bit float</x:String>
+                            <x:String>16-bit integer</x:String>
+                        </ComboBox>
+                    </Expander>
+
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="Start" Style="{StaticResource AccentButtonStyle}"
+                                IsEnabled="{x:Bind Routing.CanStart, Mode=OneWay}" Click="Start_Click" />
+                        <Button Content="Stop" IsEnabled="{x:Bind Routing.IsRunning, Mode=OneWay}" Click="Stop_Click" />
+                        <Button Content="Refresh devices" Click="RefreshDevices_Click" />
+                    </StackPanel>
+
+                    <TextBlock Text="{x:Bind Routing.StatusText, Mode=OneWay}" Style="{StaticResource MutedTextStyle}" />
+                    <TextBlock Text="{x:Bind Routing.Error, Mode=OneWay}" Style="{StaticResource ErrorTextStyle}" />
+                </StackPanel>
+            </Border>
         </StackPanel>
     </ScrollViewer>
 </Page>

@@ -116,5 +116,5 @@ What has been measured (Linux, 6 noisy test clips, details in [docs/eval.md](doc
 ## Licenses
 
 This repository does not have a license file yet, so the code's license is not decided (the `license` field in the Cargo manifests is a placeholder).
-Dependencies and models carry their own licenses: `sonora-agc2` is BSD-3-Clause, TEN VAD has extra conditions (see above), and the DPDFNet model's
+Dependencies and models carry their own licenses: the Windows app bundles the Inter font (SIL Open Font License 1.1, text in `app/OpenKrisp.App/Assets/Fonts/Inter-OFL.txt`), `sonora-agc2` is BSD-3-Clause, TEN VAD has extra conditions (see above), and the DPDFNet model's
 license should be checked before you redistribute it.

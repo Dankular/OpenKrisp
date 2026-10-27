@@ -6,71 +6,140 @@
     xmlns:local="using:OpenKrisp.App.Pages">
 
     <ScrollViewer>
-        <StackPanel Spacing="16" Padding="32" MaxWidth="820" HorizontalAlignment="Left">
+        <StackPanel Spacing="20" Padding="32,8,32,40" MaxWidth="1000" HorizontalAlignment="Left">
 
-            <TextBlock Text="Note taker" Style="{StaticResource TitleTextBlockStyle}" />
+            <TextBlock Text="Note taker" Style="{StaticResource PageTitleStyle}" />
 
-            <InfoBar Severity="Informational" IsOpen="True" IsClosable="False"
-                     Title="Recording and transcription are not available yet"
-                     Message="Action items are added and tracked by hand for now." />
-            <InfoBar x:Name="ExtractionInfo" Severity="Informational" IsClosable="False"
-                     Title="Automatic action items"
-                     Message="{x:Bind Vm.ExtractionStatus}"
-                     IsOpen="{x:Bind local:NoteTakerPage.Not(Vm.ExtractionAvailable)}" />
-
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="Action items" Style="{StaticResource SubtitleTextBlockStyle}" VerticalAlignment="Center" />
-                <SelectorBar x:Name="FilterBar" SelectionChanged="FilterBar_SelectionChanged">
-                    <SelectorBarItem x:Name="MineItem" Text="Assigned to me" IsSelected="True" />
-                    <SelectorBarItem x:Name="AllItem" Text="All action items" />
-                </SelectorBar>
-            </StackPanel>
-
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBox x:Name="NewMeetingBox" PlaceholderText="New meeting title" Width="280" KeyDown="NewMeetingBox_KeyDown" />
-                <Button Content="Add meeting" Click="AddMeeting_Click" />
-            </StackPanel>
-
-            <TextBlock Text="Add a meeting first, then add action items to it."
-                       Opacity="0.7"
-                       Visibility="{x:Bind local:NoteTakerPage.HiddenWhen(Vm.HasMeetings), Mode=OneWay}" />
-
-            <ItemsControl ItemsSource="{x:Bind Vm.Groups, Mode=OneWay}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="notes:MeetingGroup">
-                        <StackPanel Spacing="6" Margin="0,0,0,20">
-                            <StackPanel Orientation="Horizontal" Spacing="12">
-                                <TextBlock Text="{x:Bind Title}" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                <TextBlock Text="{x:Bind CountText}" Opacity="0.7" />
-                            </StackPanel>
-                            <ItemsControl ItemsSource="{x:Bind Items}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="notes:ActionItemView">
-                                        <Grid ColumnSpacing="12" Padding="0,4">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <CheckBox Content="{x:Bind Text}" IsChecked="{x:Bind Done, Mode=TwoWay}" />
-                                            <TextBlock Grid.Column="1" Text="{x:Bind TimeText}" Opacity="0.6" VerticalAlignment="Center" />
-                                            <Border Grid.Column="2" CornerRadius="4" Padding="8,2" VerticalAlignment="Center"
-                                                    Background="{x:Bind local:NoteTakerPage.DueBackground(IsOverdue)}">
-                                                <TextBlock Text="{x:Bind DueText}" />
-                                            </Border>
-                                            <TextBlock Grid.Column="3" Text="{x:Bind AssigneeText}" Opacity="0.7" VerticalAlignment="Center" />
-                                            <Button Grid.Column="4" Content="Remove" Tag="{x:Bind Id}" Click="Remove_Click" />
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <TextBox PlaceholderText="Add action item…" Tag="{x:Bind Meeting.Id}" KeyDown="AddItemBox_KeyDown" />
+            <!-- Transcription (not available yet) -->
+            <Border Style="{StaticResource CardStyle}">
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Spacing="6">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock Text="Transcription" Style="{StaticResource PageTitleStyle}" FontSize="26" />
+                            <TextBlock Text="✨" FontSize="22" VerticalAlignment="Center" />
                         </StackPanel>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+                        <TextBlock Style="{StaticResource MutedTextStyle}"
+                                   Text="Not available yet. Recording and transcription need a local speech model, which has not been chosen." />
+                    </StackPanel>
+                    <ToggleSwitch Grid.Column="1" IsEnabled="False" OnContent="" OffContent="" VerticalAlignment="Center"
+                                  AutomationProperties.Name="Transcription" />
+                </Grid>
+            </Border>
+
+            <!-- Transcript (empty state: nothing records yet) -->
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Transcript" Style="{StaticResource CardTitleStyle}" />
+                    <TextBlock Style="{StaticResource MutedTextStyle}"
+                               Text="Calls will appear here with the time, who spoke and what they said, once transcription is available." />
+                </StackPanel>
+            </Border>
+
+            <!-- Action items -->
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel Spacing="14">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <FontIcon Glyph="&#xE930;" FontSize="18" Foreground="{StaticResource HeadingBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="Action Items" Style="{StaticResource CardTitleStyle}" />
+                    </StackPanel>
+
+                    <InfoBar x:Name="ExtractionInfo" Severity="Informational" IsClosable="False"
+                             Title="Automatic action items"
+                             Message="{x:Bind Vm.ExtractionStatus}"
+                             IsOpen="{x:Bind local:NoteTakerPage.Not(Vm.ExtractionAvailable)}" />
+
+                    <SelectorBar x:Name="FilterBar" SelectionChanged="FilterBar_SelectionChanged" HorizontalAlignment="Left">
+                        <SelectorBarItem x:Name="MineItem" Text="Assigned to me" IsSelected="True" />
+                        <SelectorBarItem x:Name="AllItem" Text="All action items" />
+                    </SelectorBar>
+
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBox x:Name="NewMeetingBox" PlaceholderText="New meeting title" Width="300" KeyDown="NewMeetingBox_KeyDown" />
+                        <Button Content="Add meeting" Click="AddMeeting_Click" />
+                    </StackPanel>
+
+                    <TextBlock Text="Add a meeting first, then add action items to it." Style="{StaticResource MutedTextStyle}"
+                               Visibility="{x:Bind local:NoteTakerPage.HiddenWhen(Vm.HasMeetings), Mode=OneWay}" />
+
+                    <ItemsControl ItemsSource="{x:Bind Vm.Groups, Mode=OneWay}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="notes:MeetingGroup">
+                                <StackPanel Spacing="4" Margin="0,8,0,16">
+                                    <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,0,0,4">
+                                        <TextBlock Text="{x:Bind Title}" Style="{StaticResource RowTitleStyle}" />
+                                        <TextBlock Text="{x:Bind CountText}" Style="{StaticResource MutedTextStyle}" VerticalAlignment="Center" />
+                                    </StackPanel>
+
+                                    <ItemsControl ItemsSource="{x:Bind Items}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="notes:ActionItemView">
+                                                <Grid ColumnSpacing="12" Padding="0,6">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <CheckBox MinWidth="0" Padding="0" VerticalAlignment="Top"
+                                                              IsChecked="{x:Bind Done, Mode=TwoWay}"
+                                                              AutomationProperties.Name="{x:Bind Text}" />
+
+                                                    <TextBlock Grid.Column="1" Text="{x:Bind Text}"
+                                                               Style="{StaticResource BodyTextStyle}"
+                                                               LineHeight="22" Margin="0,4,0,0" VerticalAlignment="Top"
+                                                               Foreground="{x:Bind local:NoteTakerPage.TextBrush(Done)}"
+                                                               TextDecorations="{x:Bind local:NoteTakerPage.Decorations(Done)}" />
+
+                                                    <Border Grid.Column="2" CornerRadius="4" Padding="8,3" Margin="0,3,0,0" VerticalAlignment="Top"
+                                                            Background="{x:Bind local:NoteTakerPage.DueBackground(IsOverdue)}"
+                                                            Visibility="{x:Bind local:NoteTakerPage.VisibleWhen(HasDue)}">
+                                                        <TextBlock Text="{x:Bind DueText}" FontSize="11" FontWeight="SemiBold"
+                                                                   Foreground="{StaticResource BodyBrush}" />
+                                                    </Border>
+
+                                                    <Grid Grid.Column="3" Width="24" Height="24" VerticalAlignment="Top" Margin="0,2,0,0">
+                                                        <Ellipse Fill="{x:Bind local:NoteTakerPage.AvatarFill(AvatarColorIndex)}"
+                                                                 Visibility="{x:Bind local:NoteTakerPage.VisibleWhen(HasAssignee)}" />
+                                                        <TextBlock Text="{x:Bind AssigneeInitial}" FontSize="11" FontWeight="SemiBold"
+                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                   Foreground="{x:Bind local:NoteTakerPage.AvatarInk(AvatarColorIndex)}" />
+                                                        <FontIcon Glyph="&#xE77B;" FontSize="13" Foreground="{StaticResource MutedBrush}"
+                                                                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                  Visibility="{x:Bind local:NoteTakerPage.HiddenWhen(HasAssignee)}" />
+                                                    </Grid>
+
+                                                    <Button Grid.Column="4" Padding="6" Background="Transparent" BorderThickness="0"
+                                                            VerticalAlignment="Top" Tag="{x:Bind Id}" Click="Remove_Click"
+                                                            ToolTipService.ToolTip="Remove">
+                                                        <FontIcon Glyph="&#xE711;" FontSize="10" Foreground="{StaticResource MutedBrush}" />
+                                                    </Button>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <TextBox PlaceholderText="Add action item…" Tag="{x:Bind Meeting.Id}" KeyDown="AddItemBox_KeyDown" Margin="0,6,0,0" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <!-- Key points (empty state: needs transcription and a local language model) -->
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Key Points" Style="{StaticResource CardTitleStyle}" />
+                    <TextBlock Style="{StaticResource MutedTextStyle}"
+                               Text="A short summary of each call will appear here. It needs transcription and a local language model, neither of which is set up yet." />
+                </StackPanel>
+            </Border>
         </StackPanel>
     </ScrollViewer>
 </Page>

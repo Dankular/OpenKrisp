@@ -134,6 +134,30 @@ public class ActionItemsViewModelTests
     }
 
     [Fact]
+    public void Avatar_letter_and_colour_are_stable_and_the_user_is_You()
+    {
+        var (vm, s, f) = Make();
+        using var _ = f;
+        var m = s.AddMeeting("m");
+        s.AddItem(m.Id, "a", ActionItem.Me);
+        s.AddItem(m.Id, "b", "sarma");
+        s.AddItem(m.Id, "c", "Sarma ");
+        s.AddItem(m.Id, "d");
+        vm.Filter = ActionItemFilter.All;
+        var rows = vm.Groups[0].Items.ToDictionary(r => r.Text);
+
+        Assert.Equal("Y", rows["a"].AssigneeInitial);
+        Assert.Equal(3, rows["a"].AvatarColorIndex);
+        Assert.Equal("S", rows["b"].AssigneeInitial);
+        Assert.Equal("S", rows["c"].AssigneeInitial);
+        Assert.Equal(rows["b"].AvatarColorIndex, rows["c"].AvatarColorIndex); // case/space-insensitive
+        Assert.Equal("", rows["d"].AssigneeInitial);
+        Assert.False(rows["d"].HasAssignee);
+        Assert.All(rows.Values, r => Assert.InRange(r.AvatarColorIndex, 0, AvatarColors.Count - 1));
+        Assert.False(rows["a"].HasDue);
+    }
+
+    [Fact]
     public void New_items_follow_the_current_filter()
     {
         var (vm, s, f) = Make();

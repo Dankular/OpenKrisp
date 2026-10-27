@@ -31,6 +31,20 @@ public sealed class ActionItemView : ObservableObject
         var name => name,
     };
 
+    public bool HasDue => Item.Due is not null;
+    public bool HasAssignee => Item.Assignee.Length > 0;
+
+    /// <summary>Letter shown in the assignee's avatar: "Y" for the user (as in "You"), otherwise the name's first letter, upper-cased. Empty when unassigned.</summary>
+    public string AssigneeInitial => Item.Assignee switch
+    {
+        "" => "",
+        ActionItem.Me => "Y",
+        var name => char.ToUpperInvariant(name.Trim()[0]).ToString(),
+    };
+
+    /// <summary>Which of the five avatar colours to use (0-4). Stable across runs: the same name always gets the same colour.</summary>
+    public int AvatarColorIndex => AvatarColors.IndexFor(Item.Assignee);
+
     public bool Done
     {
         get => Item.Done;
@@ -40,6 +54,21 @@ public sealed class ActionItemView : ObservableObject
             _store.SetDone(Item.Id, value); // the store raises Changed; the view model rebuilds
             OnPropertyChanged();
         }
+    }
+}
+
+public static class AvatarColors
+{
+    public const int Count = 5;
+
+    /// <summary>The user's own avatar always uses index 3.</summary>
+    public static int IndexFor(string assignee)
+    {
+        if (assignee.Length == 0) return 0;
+        if (assignee == ActionItem.Me) return 3;
+        var sum = 0;
+        foreach (var c in assignee.Trim().ToLowerInvariant()) sum += c; // not string.GetHashCode(): that changes every run
+        return sum % Count;
     }
 }
 
