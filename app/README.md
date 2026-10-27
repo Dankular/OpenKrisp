@@ -1,53 +1,58 @@
-# OpenKrisp app (Windows)
+# OpenKrisp for Windows
 
-| project | what | status |
-|---|---|---|
-| `OpenKrisp.Core` | Engine bindings (P/Invoke to the Rust `openkrisp_engine`), the two tab view models, the action-item store. Plain `net8.0`, no UI framework. | Built and tested on Linux (25 tests) |
-| `OpenKrisp.Core.Tests` | xunit tests, including real calls into the Rust library | Passing on Linux |
-| `OpenKrisp.App` | WinUI 3 shell: "Noise cancellation" and "Note taker" tabs | **Not built or run.** Windows only; the dev sandbox has no Windows. XAML is checked for well-formedness only |
+Local meeting and lecture recording, Whistle transcription, speaker labels, searchable notes, summaries and action items in a WinUI 3 workspace.
 
-## Look
+## Workspace
 
-Light theme only (it does not follow Windows dark mode), violet accent, a soft lavender background with white rounded cards, bold navy headings, and the Inter font
-(bundled; falls back to the Windows UI font if it cannot load). The Note taker follows the reference designs: a Transcription card, a Transcript card, Action Items
-(square checkboxes, done items struck through and greyed, a date chip and a coloured assignee avatar per item) and a Key Points card. Transcription, the transcript and
-key points are shown as empty states because nothing records or summarises yet. The styling was written from reference images without being able to see it
-rendered; expect to adjust spacing and colours once it has been looked at on Windows.
+- **Meetings:** one audio-source selector, a prominent fixed Record / Stop header, a searchable meeting list, and separate Notes and Recording & Transcript tabs. Summarize sits above the selected transcript.
+- **Action items:** Assigned to me and All action items views, search and type filters, tasks/decisions/follow-ups, editable text/owners/due dates, manual additions, deletion, and Markdown/CSV export. Completed items sort to the bottom.
+- **Status:** model download and load progress, Tract state, Load, Unload, Redownload ASR and Restart Tract. Models install and load automatically. Lifecycle controls are disabled during recording and processing. Unload stops the model host to release GPU allocations.
+- **Noise cancellation:** the existing Rust DPDFNet engine and audio routing controls.
 
-## What the app does today
+## Local models
 
-**Noise cancellation tab:** switches for "Cancel my noise" (microphone lane) and "Cancel others' noise" (incoming-audio lane), and "Voice isolation" Off / Auto.
-Auto is meant to remove nearby voices and echo on top of standard noise removal. Neither is implemented, and the tab says which parts are not active yet
-(the text comes from the engine's own capability flags). The tab also shows whether any audio is actually flowing through the engine.
+Whistle remains the ASR model in English, German, French, Spanish, Italian, Dutch and Polish. The app uses an [ONNX export of the same Whistle weights](https://huggingface.co/mrfakename/whistle-ONNX), pinned to revision `14fc92cb09ad5c271fe9a4ec4be70274790050d2`, on **Sonos Tract CUDA**. There is no silent CPU ASR fallback. Tract 0.23.9 handles Gather/index operations on CPU to avoid its empty initial KV-cache CUDA Gather limitation; the ASR neural network executes on CUDA.
 
-**Audio routing (same tab):** choose the microphone, where the cleaned microphone goes (the OpenKrisp virtual microphone, a playback device, or nowhere),
-and optionally a virtual speaker to capture for incoming audio plus the real device to play the cleaned result on. Start/Stop begins and ends live audio; the status
-line shows the worst processing time per block and any dropped samples or gaps. Until you press Start nothing feeds audio into the engine, so the switches change settings but not sound.
-Capturing and playing on the same device is refused, because the cleaned audio would loop. None of this has been run on a real device: it is compile-checked and its logic is tested with a fake engine.
+[Smart Turn v3 ONNX](https://huggingface.co/onnx-community/smart-turn-v3-ONNX), revision `dbd03130e87854011fa8c2f203077f2cbfc3adad`, runs on Tract CUDA and predicts semantic end-of-turn probability from audio. Its Whisper-derived encoder is used only for turn classification; it does not transcribe audio or replace Whistle. Model turn endings and speaker changes determine paragraph boundaries. Fixed character-count and pause-based paragraph splitting are removed.
 
-**Note taker tab:** action items grouped by meeting, with "Assigned to me" and "All action items" views, time, due date and assignee per item, and "Add action item…".
-Items are added by hand and saved to `%LOCALAPPDATA%\OpenKrisp\action-items.json`. Recording, transcription and automatic extraction are not implemented
-(extraction needs a local language model that has not been chosen).
+Speech segmentation uses the existing pyannote model on Tract CPU. The live speech threshold controls its actual speech posterior. The separate Smart Turn threshold controls turn completion. Raw recording peaks/RMS remain visible on a green-to-red meter, independently of both model thresholds. Speaker embeddings and final clustering use sherpa-onnx with NeMo TitaNet; the expected speaker count defaults to two (zero selects automatic clustering).
 
-## Build and test
+Titles use [Supra Title 50M](https://huggingface.co/SupraLabs/supra-title-50m-pre) Q8 weights and a minimal CPU llama.cpp completion runtime. Summaries, key points and topic sections use quantized BART-large-CNN ONNX. These purpose-built note models replace Qwen. No PyTorch or TensorFlow dependency is installed.
 
-On any OS with the .NET 8 SDK (the Core library and tests):
+Automatic action extraction runs on live and saved transcripts without waiting for Summarize. It conservatively recognizes explicit English commitments, requests, decisions and follow-ups, retaining exact source quotes. It does not infer speaker names or unstated obligations. Due dates are automatically filled only for explicit ISO dates; other dates can be entered manually. User edits, completion state and deleted-item suppression survive extraction and summarization. Generated speaker labels must be reassigned to **Me** when appropriate; the app does not guess which speaker is the user.
 
-```
-cargo build --release -p openkrisp-engine          # from the repo root (add --features audio for live audio; needs libasound2-dev on Linux)
-export OPENKRISP_MODEL=/path/to/dpdfnet2_48khz_hr.onnx
-export LD_LIBRARY_PATH=$PWD/target/release          # Linux; on Windows put openkrisp_engine.dll next to the test binaries or on PATH
-dotnet test app/OpenKrisp.Core.Tests
+Summaries are generated only on click, using chunking and hierarchical reduction for long transcripts. BART and the automatic extraction rules currently target English; Whistle still supports all seven ASR languages. Speaker identities and semantic turn boundaries are model estimates, particularly with overlap, short spans, music and noise.
+
+## Setup and privacy
+
+Python 3.12+ and a compatible NVIDIA CUDA 13 installation/driver are required for this CUDA build. Status reports missing runtime libraries or model errors. Model weights/runtime downloads are roughly 800 MB once, plus Python dependencies. To prepare manually:
+
+```powershell
+python notes/bootstrap.py --home .notes-runtime
+$env:OPENKRISP_NOTES_HOME = "$PWD\.notes-runtime"
 ```
 
-Without `OPENKRISP_MODEL` the native-engine tests are reported as skipped, not passed.
+The unpackaged development publish also discovers `.notes-runtime` beside the repository's `dist` folder. Normal installations store models under `%LOCALAPPDATA%\OpenKrisp\local-notes`.
 
-On Windows (the app; needs the .NET 8 SDK and Visual Studio build tools for WinUI 3):
+Inference uses installed local files. An app-owned model host binds to loopback on a random port and uses a per-process bearer token; audio is never submitted to a cloud service. The host is terminated when the app closes. There is no meeting participant bot, online account, cloud/team synchronization, or Slack/HubSpot/Salesforce delivery integration. Markdown and CSV exports can be shared manually.
 
+Meetings and action items live in `%LOCALAPPDATA%\OpenKrisp\action-items.json`; recordings live in its `recordings` folder. Automatic extraction's initial migration creates a backup. Capture is independent of live preview: if preview falls behind, all audio remains in the saved WAV and the final transcript is generated after stopping.
+
+## Virtual microphone
+
+For the configured Voicemeeter Standard setup, the playback virtual microphone is **Voicemeeter Out B1 (VB-Audio Voicemeeter VAIO)**. It is preferred in the single Audio source selector when available. The existing helper mirrors playback to B1:
+
+```powershell
+dotnet run --project tools/LoopbackMic -- --route-only
 ```
-cargo build --release -p openkrisp-engine
-dotnet build app/OpenKrisp.App -c Release -p:Platform=x64
+
+The helper preserves the hardware speaker route and saves/restores its previous routing. Create `stop.txt` beside the helper executable to stop it. Alternatively, select **Computer audio (speakers, YouTube, calls)** to capture playback directly through WASAPI.
+
+## Build
+
+```powershell
+cargo build --release -p openkrisp-engine --features audio
+dotnet publish app/OpenKrisp.App -c Release -p:Platform=x64 -r win-x64 --self-contained true -o dist/OpenKrisp
 ```
 
-The app looks for the model at `%LOCALAPPDATA%\OpenKrisp\models\dpdfnet2_48khz_hr.onnx` (or `OPENKRISP_MODEL`). If the model or the engine DLL is missing the
-app still opens and the Noise cancellation tab explains what is missing. The project pins Windows App SDK 1.8.260921001; that combination has not been compiled yet.
+The publish includes .NET, Windows App SDK, compiled XAML and PRI resources. No separate .NET runtime installation is required. The noise-removal model is resolved from `OPENKRISP_MODEL` or `%LOCALAPPDATA%\OpenKrisp\models\dpdfnet2_48khz_hr.onnx`. Voice isolation, echo cancellation and nearby-voice removal remain unimplemented.

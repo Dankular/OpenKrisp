@@ -19,6 +19,9 @@ public sealed class ActionItemView : ObservableObject
 
     public ActionItem Item { get; }
     public Guid Id => Item.Id;
+    public string Evidence => Item.Evidence;
+    public string Kind => Item.Kind;
+    public string MeetingTitle => _store.Meetings.FirstOrDefault(m => m.Id == Item.MeetingId)?.Title ?? "Meeting";
     public string Text => Item.Text;
     public string TimeText => Item.CapturedAt.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture);
     public string DueText => Item.Due is { } d ? "Due " + d.ToString("MMM d", CultureInfo.InvariantCulture) : "Due date";
@@ -39,7 +42,7 @@ public sealed class ActionItemView : ObservableObject
     {
         "" => "",
         ActionItem.Me => "Y",
-        var name => char.ToUpperInvariant(name.Trim()[0]).ToString(),
+        var name => string.IsNullOrWhiteSpace(name) ? "" : char.ToUpperInvariant(name.Trim()[0]).ToString(),
     };
 
     /// <summary>Which of the five avatar colours to use (0-4). Stable across runs: the same name always gets the same colour.</summary>
@@ -90,13 +93,19 @@ public sealed class MeetingGroup
 /// <summary>State behind the "Action items" view: items grouped by meeting, filtered to "Assigned to me" or "All".</summary>
 public sealed class ActionItemsViewModel : ObservableObject
 {
-    public const string RecordingNotImplemented = "Recording and transcription are not implemented yet.";
-
     private readonly ActionItemStore _store;
     private readonly IActionItemExtractor _extractor;
     private readonly Func<DateOnly> _today;
     private ActionItemFilter _filter = ActionItemFilter.AssignedToMe;
     private IReadOnlyList<MeetingGroup> _groups = Array.Empty<MeetingGroup>();
+    private IReadOnlyList<ActionItemView> _items = Array.Empty<ActionItemView>();
+    private string _search = "";
+    private int _kindIndex;
+    public string Search { get => _search; set { if (SetField(ref _search, value)) Rebuild(); } }
+    public int KindIndex { get => _kindIndex; set { if (SetField(ref _kindIndex, value)) Rebuild(); } }
+    public IReadOnlyList<ActionItemView> Items { get => _items; private set => SetField(ref _items, value); }
+    public IReadOnlyList<Meeting> Meetings => _store.Meetings.OrderByDescending(m => m.StartedAt).ToList();
+    public string CountText => $"{Items.Count(i => !i.Done)} open · {Items.Count(i => i.Done)} completed";
 
     public ActionItemsViewModel(ActionItemStore store, IActionItemExtractor? extractor = null, Func<DateOnly>? today = null)
     {
@@ -126,6 +135,27 @@ public sealed class ActionItemsViewModel : ObservableObject
         => _store.AddItem(meetingId, text, _filter == ActionItemFilter.AssignedToMe ? ActionItem.Me : "");
 
     public void RemoveItem(Guid id) => _store.Remove(id);
+    public void EditItem(Guid id, string text, string assignee, DateOnly? due, string kind) => _store.EditItem(id, text, assignee, due, kind);
+
+    public string ExportMarkdown()
+    {
+        var text = new System.Text.StringBuilder("# " + (Filter == ActionItemFilter.AssignedToMe ? "Assigned to me" : "All action items") + "\n\n");
+        foreach (var item in Items)
+        {
+            text.AppendLine($"- [{(item.Done ? "x" : " ")}] **{item.Kind}:** {item.Text}");
+            text.AppendLine($"  - Meeting: {item.MeetingTitle} · Assigned to: {item.AssigneeText}" + (item.HasDue ? " · " + item.DueText : ""));
+            if (item.Evidence.Length > 0) text.AppendLine("  - Source: " + item.Evidence);
+        }
+        return text.ToString();
+    }
+
+    public string ExportCsv()
+    {
+        static string Cell(string value) => "\"" + value.Replace("\"", "\"\"") + "\"";
+        var lines = new List<string> { "Type,Text,Meeting,Assignee,Due,Completed,Source" };
+        lines.AddRange(Items.Select(i => string.Join(",", new[] { i.Kind, i.Text, i.MeetingTitle, i.AssigneeText, i.Item.Due?.ToString("yyyy-MM-dd") ?? "", i.Done ? "Yes" : "No", i.Evidence }.Select(Cell))));
+        return string.Join("\r\n", lines);
+    }
 
     /// <summary>Extracts items from a transcript into a meeting. Throws <see cref="NotSupportedException"/> when no extractor is configured.</summary>
     public async Task<int> ExtractAsync(Guid meetingId, string transcript, CancellationToken ct = default)
@@ -144,13 +174,22 @@ public sealed class ActionItemsViewModel : ObservableObject
         {
             var mine = items.Where(i => i.MeetingId == m.Id)
                 .Where(i => _filter == ActionItemFilter.All || i.Assignee == ActionItem.Me)
-                .OrderBy(i => i.CapturedAt)
+                .OrderBy(i => i.Done).ThenBy(i => i.CapturedAt)
                 .Select(i => new ActionItemView(i, _store, _today))
                 .ToList();
             // An empty meeting is still listed on "All" so items can be added to it.
             if (mine.Count > 0 || _filter == ActionItemFilter.All) groups.Add(new MeetingGroup(m, mine));
         }
         Groups = groups;
+        var kinds = new[] { "", "Task", "Decision", "Follow-up" };
+        var selectedKind = kinds[Math.Clamp(KindIndex, 0, 3)];
+        Items = items.Where(i => Filter == ActionItemFilter.All || i.Assignee == ActionItem.Me)
+            .Where(i => selectedKind.Length == 0 || i.Kind == selectedKind)
+            .Select(i => new ActionItemView(i, _store, _today))
+            .Where(i => string.IsNullOrWhiteSpace(Search) || (i.Text + " " + i.MeetingTitle + " " + i.AssigneeText + " " + i.Evidence).Contains(Search.Trim(), StringComparison.OrdinalIgnoreCase))
+            .OrderBy(i => i.Done).ThenBy(i => i.Item.Due ?? DateOnly.MaxValue).ThenByDescending(i => i.Item.CapturedAt).ToList();
         OnPropertyChanged(nameof(HasMeetings));
+        OnPropertyChanged(nameof(Meetings));
+        OnPropertyChanged(nameof(CountText));
     }
 }

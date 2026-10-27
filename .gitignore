@@ -6,3 +6,9 @@ bin/
 obj/
 __pycache__/
 /dist
+/.notes-venv/
+/.notes-runtime/
+/llama-release.json
+/qwen-model.json
+/needle-api.py
+/whistle-api.py

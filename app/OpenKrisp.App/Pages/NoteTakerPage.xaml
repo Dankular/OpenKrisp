@@ -1,145 +1,146 @@
-<Page
-    x:Class="OpenKrisp.App.Pages.NoteTakerPage"
+<Page x:Class="OpenKrisp.App.Pages.NoteTakerPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:notes="using:OpenKrisp.Core.Notes"
     xmlns:local="using:OpenKrisp.App.Pages">
-
-    <ScrollViewer>
-        <StackPanel Spacing="20" Padding="32,8,32,40" MaxWidth="1000" HorizontalAlignment="Left">
-
-            <TextBlock Text="Note taker" Style="{StaticResource PageTitleStyle}" />
-
-            <!-- Transcription (not available yet) -->
-            <Border Style="{StaticResource CardStyle}">
-                <Grid ColumnSpacing="16">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Spacing="6">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <TextBlock Text="Transcription" Style="{StaticResource PageTitleStyle}" FontSize="26" />
-                            <TextBlock Text="✨" FontSize="22" VerticalAlignment="Center" />
-                        </StackPanel>
-                        <TextBlock Style="{StaticResource MutedTextStyle}"
-                                   Text="Not available yet. Recording and transcription need a local speech model, which has not been chosen." />
-                    </StackPanel>
-                    <ToggleSwitch Grid.Column="1" IsEnabled="False" OnContent="" OffContent="" VerticalAlignment="Center"
-                                  AutomationProperties.Name="Transcription" />
+    <Grid Background="White" Padding="24,16,24,20" RowSpacing="14">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Grid ColumnSpacing="16">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel VerticalAlignment="Center" Spacing="4">
+                <TextBlock Text="Meetings" Style="{StaticResource PageTitleStyle}"/>
+                <TextBlock Text="{x:Bind NotesVm.Status, Mode=OneWay}" Style="{StaticResource MutedTextStyle}" TextWrapping="Wrap"/>
+                <TextBlock Text="{x:Bind NotesVm.Error, Mode=OneWay}" Foreground="DarkRed" TextWrapping="Wrap" IsTextSelectionEnabled="True"/>
+            </StackPanel>
+            <Button Grid.Column="1" Click="Record_Click" IsEnabled="{x:Bind NotesVm.CanStart, Mode=OneWay}" Style="{StaticResource AccentButtonStyle}" Padding="28,14" MinWidth="150" AutomationProperties.Name="Start recording">
+                <StackPanel Orientation="Horizontal" Spacing="10"><FontIcon Glyph="&#xE7C8;" FontSize="20"/><TextBlock Text="Record" FontSize="19" FontWeight="SemiBold"/></StackPanel>
+            </Button>
+            <Button Grid.Column="2" Content="Stop and transcribe" Click="StopRecording_Click" Padding="20,14" IsEnabled="{x:Bind NotesVm.CanStop, Mode=OneWay}"/>
+        </Grid>
+        <Grid Grid.Row="1" ColumnSpacing="10">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <ComboBox Header="Audio source" ItemsSource="{x:Bind NotesVm.AudioSources}" DisplayMemberPath="Name" SelectedItem="{x:Bind NotesVm.SelectedAudioSource, Mode=TwoWay}" IsEnabled="{x:Bind NotesVm.CanSetUp, Mode=OneWay}" HorizontalAlignment="Stretch"/>
+            <Button Grid.Column="1" Content="Import audio" Click="ImportAudio_Click" IsEnabled="{x:Bind NotesVm.CanStart, Mode=OneWay}" VerticalAlignment="Bottom"/>
+            <Button Grid.Column="2" Content="Cancel processing" Click="CancelProcessing_Click" IsEnabled="{x:Bind NotesVm.CanCancel, Mode=OneWay}" VerticalAlignment="Bottom"/>
+        </Grid>
+        <Expander Grid.Row="2" Header="Recording settings" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+            <StackPanel Spacing="10">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="150"/><ColumnDefinition Width="130"/></Grid.ColumnDefinitions>
+                    <TextBox x:Name="RecordingTitleBox" Header="Title (optional)" PlaceholderText="A sentence title is generated after transcription"/>
+                    <NumberBox Grid.Column="1" Header="Speakers (0 = auto)" Minimum="0" Maximum="20" ValueChanged="SpeakerCount_Changed" Value="2"/>
+                    <ComboBox Grid.Column="2" Header="Type" SelectedIndex="{x:Bind NotesVm.NewKindIndex, Mode=TwoWay}"><ComboBoxItem Content="Meeting"/><ComboBoxItem Content="Lecture"/></ComboBox>
                 </Grid>
-            </Border>
-
-            <!-- Transcript (empty state: nothing records yet) -->
-            <Border Style="{StaticResource CardStyle}">
+                <TextBox Header="Tags" PlaceholderText="Project, course, topic" Text="{x:Bind NotesVm.NewTags, Mode=TwoWay}"/>
+                <TextBlock Text="{x:Bind NotesVm.ModelStatus, Mode=OneWay}" TextWrapping="Wrap" Style="{StaticResource MutedTextStyle}"/>
+                <TextBlock Text="Whistle: English, German, French, Spanish, Italian, Dutch and Polish. Audio and notes remain local." TextWrapping="Wrap" Style="{StaticResource MutedTextStyle}"/>
+                <Button Content="Set up / load local models" Click="SetUpModels_Click" IsEnabled="{x:Bind NotesVm.CanSetUp, Mode=OneWay}"/>
+            </StackPanel>
+        </Expander>
+        <Expander Grid.Row="3" Header="Live audio and detection" IsExpanded="{x:Bind NotesVm.IsRecording, Mode=OneWay}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+            <ScrollViewer MaxHeight="440">
                 <StackPanel Spacing="10">
-                    <TextBlock Text="Transcript" Style="{StaticResource CardTitleStyle}" />
-                    <TextBlock Style="{StaticResource MutedTextStyle}"
-                               Text="Calls will appear here with the time, who spoke and what they said, once transcription is available." />
+                    <Border BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="16">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="Live audio and detection" FontWeight="SemiBold" />
+                            <TextBlock Text="{x:Bind NotesVm.ProcessingStep, Mode=OneWay}" TextWrapping="Wrap" />
+                            <Grid x:Name="LevelTrack" Height="28" SizeChanged="LevelTrack_SizeChanged" Background="#202A30" CornerRadius="4"
+                                  AutomationProperties.Name="Live audio peak meter, minus 60 to zero dBFS">
+                                <Border x:Name="LevelFill" CornerRadius="4">
+                                    <Border.Background>
+                                        <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
+                                            <GradientStop Color="#22C55E" Offset="0" />
+                                            <GradientStop Color="#84CC16" Offset="0.55" />
+                                            <GradientStop Color="#FACC15" Offset="0.75" />
+                                            <GradientStop Color="#F97316" Offset="0.9" />
+                                            <GradientStop Color="#EF4444" Offset="1" />
+                                        </LinearGradientBrush>
+                                    </Border.Background>
+                                </Border>
+                                <Border x:Name="HeldPeakMarker" Width="2" Background="White" HorizontalAlignment="Left" ToolTipService.ToolTip="Held peak (one second)" />
+                                <Border x:Name="RmsFill" Height="3" Background="White" VerticalAlignment="Bottom" HorizontalAlignment="Left" Opacity="0.8" />
+                            </Grid>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition /><ColumnDefinition /></Grid.ColumnDefinitions>
+                                <TextBlock Text="−60 dBFS" FontSize="11" />
+                                <TextBlock Grid.Column="1" Text="−40" FontSize="11" />
+                                <TextBlock Grid.Column="2" Text="−20" FontSize="11" />
+                                <TextBlock Grid.Column="2" Text="0 · clip" HorizontalAlignment="Right" FontSize="11" />
+                            </Grid>
+                            <TextBlock Text="{x:Bind NotesVm.LevelText, Mode=OneWay}" Style="{StaticResource MutedTextStyle}" />
+                            <TextBlock Text="{x:Bind NotesVm.SpeechThresholdText, Mode=OneWay}" />
+                            <Grid x:Name="SpeechConfidenceTrack" Height="14" SizeChanged="LevelTrack_SizeChanged">
+                                <ProgressBar Minimum="0" Maximum="100" Value="{x:Bind NotesVm.SpeechProbabilityPercent, Mode=OneWay}" VerticalAlignment="Center" />
+                                <Border x:Name="SpeechCutoffMarker" Width="3" Background="#38BDF8" HorizontalAlignment="Left" />
+                            </Grid>
+                            <Slider Minimum="1" Maximum="99" StepFrequency="1" Value="{x:Bind NotesVm.SpeechThresholdPercent, Mode=TwoWay}"
+                                    AutomationProperties.Name="Speech detection confidence threshold" />
+                            <TextBlock Text="{x:Bind NotesVm.SpeechDetectionText, Mode=OneWay}" TextWrapping="Wrap" />
+                            <TextBlock Text="{x:Bind NotesVm.TurnThresholdText, Mode=OneWay}" />
+                            <Grid x:Name="TurnConfidenceTrack" Height="14" SizeChanged="LevelTrack_SizeChanged">
+                                <ProgressBar Minimum="0" Maximum="100" Value="{x:Bind NotesVm.TurnProbabilityPercent, Mode=OneWay}" VerticalAlignment="Center" />
+                                <Border x:Name="TurnCutoffMarker" Width="3" Background="#38BDF8" HorizontalAlignment="Left" />
+                            </Grid>
+                            <Slider Minimum="1" Maximum="99" StepFrequency="1" Value="{x:Bind NotesVm.TurnThresholdPercent, Mode=TwoWay}"
+                                    AutomationProperties.Name="Smart Turn completion threshold" />
+                            <TextBlock Text="Blue markers show the actual model cutoffs. Speech detection filters transcription; Smart Turn determines when a thought is complete. The original recording is preserved."
+                                       Style="{StaticResource MutedTextStyle}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+                    <TextBlock Text="{x:Bind NotesVm.LiveStatus, Mode=OneWay}" Style="{StaticResource MutedTextStyle}" TextWrapping="Wrap"/>
+                    <ListView x:Name="LiveTranscriptList" ItemsSource="{x:Bind NotesVm.LiveTurns, Mode=OneWay}" MaxHeight="180" SelectionMode="None">
+                        <ListView.ItemTemplate><DataTemplate x:DataType="notes:TranscriptTurn">
+                            <StackPanel Spacing="5" Padding="0,6"><StackPanel Orientation="Horizontal" Spacing="12"><TextBlock Text="{x:Bind Speaker}" FontWeight="SemiBold"/><TextBlock Text="{x:Bind TimeText}" Style="{StaticResource MutedTextStyle}"/></StackPanel><TextBlock Text="{x:Bind Text}" TextWrapping="Wrap" IsTextSelectionEnabled="True" LineHeight="23"/></StackPanel>
+                        </DataTemplate></ListView.ItemTemplate>
+                    </ListView>
                 </StackPanel>
-            </Border>
-
-            <!-- Action items -->
-            <Border Style="{StaticResource CardStyle}">
-                <StackPanel Spacing="14">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <FontIcon Glyph="&#xE930;" FontSize="18" Foreground="{StaticResource HeadingBrush}" VerticalAlignment="Center" />
-                        <TextBlock Text="Action Items" Style="{StaticResource CardTitleStyle}" />
-                    </StackPanel>
-
-                    <InfoBar x:Name="ExtractionInfo" Severity="Informational" IsClosable="False"
-                             Title="Automatic action items"
-                             Message="{x:Bind Vm.ExtractionStatus}"
-                             IsOpen="{x:Bind local:NoteTakerPage.Not(Vm.ExtractionAvailable)}" />
-
-                    <SelectorBar x:Name="FilterBar" SelectionChanged="FilterBar_SelectionChanged" HorizontalAlignment="Left">
-                        <SelectorBarItem x:Name="MineItem" Text="Assigned to me" IsSelected="True" />
-                        <SelectorBarItem x:Name="AllItem" Text="All action items" />
-                    </SelectorBar>
-
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBox x:Name="NewMeetingBox" PlaceholderText="New meeting title" Width="300" KeyDown="NewMeetingBox_KeyDown" />
-                        <Button Content="Add meeting" Click="AddMeeting_Click" />
-                    </StackPanel>
-
-                    <TextBlock Text="Add a meeting first, then add action items to it." Style="{StaticResource MutedTextStyle}"
-                               Visibility="{x:Bind local:NoteTakerPage.HiddenWhen(Vm.HasMeetings), Mode=OneWay}" />
-
-                    <ItemsControl ItemsSource="{x:Bind Vm.Groups, Mode=OneWay}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="notes:MeetingGroup">
-                                <StackPanel Spacing="4" Margin="0,8,0,16">
-                                    <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,0,0,4">
-                                        <TextBlock Text="{x:Bind Title}" Style="{StaticResource RowTitleStyle}" />
-                                        <TextBlock Text="{x:Bind CountText}" Style="{StaticResource MutedTextStyle}" VerticalAlignment="Center" />
-                                    </StackPanel>
-
-                                    <ItemsControl ItemsSource="{x:Bind Items}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate x:DataType="notes:ActionItemView">
-                                                <Grid ColumnSpacing="12" Padding="0,6">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" />
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="Auto" />
-                                                        <ColumnDefinition Width="Auto" />
-                                                        <ColumnDefinition Width="Auto" />
-                                                    </Grid.ColumnDefinitions>
-
-                                                    <CheckBox MinWidth="0" Padding="0" VerticalAlignment="Top"
-                                                              IsChecked="{x:Bind Done, Mode=TwoWay}"
-                                                              AutomationProperties.Name="{x:Bind Text}" />
-
-                                                    <TextBlock Grid.Column="1" Text="{x:Bind Text}"
-                                                               Style="{StaticResource BodyTextStyle}"
-                                                               LineHeight="22" Margin="0,4,0,0" VerticalAlignment="Top"
-                                                               Foreground="{x:Bind local:NoteTakerPage.TextBrush(Done)}"
-                                                               TextDecorations="{x:Bind local:NoteTakerPage.Decorations(Done)}" />
-
-                                                    <Border Grid.Column="2" CornerRadius="4" Padding="8,3" Margin="0,3,0,0" VerticalAlignment="Top"
-                                                            Background="{x:Bind local:NoteTakerPage.DueBackground(IsOverdue)}"
-                                                            Visibility="{x:Bind local:NoteTakerPage.VisibleWhen(HasDue)}">
-                                                        <TextBlock Text="{x:Bind DueText}" FontSize="11" FontWeight="SemiBold"
-                                                                   Foreground="{StaticResource BodyBrush}" />
-                                                    </Border>
-
-                                                    <Grid Grid.Column="3" Width="24" Height="24" VerticalAlignment="Top" Margin="0,2,0,0">
-                                                        <Ellipse Fill="{x:Bind local:NoteTakerPage.AvatarFill(AvatarColorIndex)}"
-                                                                 Visibility="{x:Bind local:NoteTakerPage.VisibleWhen(HasAssignee)}" />
-                                                        <TextBlock Text="{x:Bind AssigneeInitial}" FontSize="11" FontWeight="SemiBold"
-                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                                   Foreground="{x:Bind local:NoteTakerPage.AvatarInk(AvatarColorIndex)}" />
-                                                        <FontIcon Glyph="&#xE77B;" FontSize="13" Foreground="{StaticResource MutedBrush}"
-                                                                  HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                                  Visibility="{x:Bind local:NoteTakerPage.HiddenWhen(HasAssignee)}" />
-                                                    </Grid>
-
-                                                    <Button Grid.Column="4" Padding="6" Background="Transparent" BorderThickness="0"
-                                                            VerticalAlignment="Top" Tag="{x:Bind Id}" Click="Remove_Click"
-                                                            ToolTipService.ToolTip="Remove">
-                                                        <FontIcon Glyph="&#xE711;" FontSize="10" Foreground="{StaticResource MutedBrush}" />
-                                                    </Button>
-                                                </Grid>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-
-                                    <TextBox PlaceholderText="Add action item…" Tag="{x:Bind Meeting.Id}" KeyDown="AddItemBox_KeyDown" Margin="0,6,0,0" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-            </Border>
-
-            <!-- Key points (empty state: needs transcription and a local language model) -->
-            <Border Style="{StaticResource CardStyle}">
-                <StackPanel Spacing="10">
-                    <TextBlock Text="Key Points" Style="{StaticResource CardTitleStyle}" />
-                    <TextBlock Style="{StaticResource MutedTextStyle}"
-                               Text="A short summary of each call will appear here. It needs transcription and a local language model, neither of which is set up yet." />
-                </StackPanel>
-            </Border>
-        </StackPanel>
-    </ScrollViewer>
+            </ScrollViewer>
+        </Expander>
+        <Grid Grid.Row="4" ColumnSpacing="24">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="210"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Grid RowSpacing="10">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <TextBox PlaceholderText="Search meetings and notes" Text="{x:Bind NotesVm.Search, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                <TextBox Grid.Row="1" PlaceholderText="Filter by tag" Text="{x:Bind NotesVm.TagFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                <ListView Grid.Row="2" ItemsSource="{x:Bind NotesVm.Transcripts, Mode=OneWay}" SelectedItem="{x:Bind NotesVm.SelectedTranscript, Mode=TwoWay}" SelectionMode="Single" HorizontalContentAlignment="Stretch">
+                    <ListView.ItemTemplate><DataTemplate x:DataType="notes:TranscriptCard"><StackPanel Padding="2,12" Spacing="6"><TextBlock Text="{x:Bind Title}" TextWrapping="Wrap" FontWeight="SemiBold"/><TextBlock Text="{x:Bind StartedText}" FontSize="11" Foreground="{StaticResource MutedBrush}"/><TextBlock Text="{x:Bind Kind}" FontSize="11" Foreground="{StaticResource MutedBrush}"/></StackPanel></DataTemplate></ListView.ItemTemplate>
+                </ListView>
+            </Grid>
+            <ContentControl Grid.Column="1" Content="{x:Bind NotesVm.SelectedTranscript, Mode=OneWay}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+                <ContentControl.ContentTemplate>
+                    <DataTemplate x:DataType="notes:TranscriptCard">
+                        <Grid RowSpacing="12">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Spacing="5"><TextBlock Text="{x:Bind Title}" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock Text="{x:Bind StartedText}" Style="{StaticResource MutedTextStyle}"/></StackPanel>
+                                <Button Grid.Column="1" Content="Summarize" Style="{StaticResource AccentButtonStyle}" Tag="{x:Bind Id}" Click="Summarize_Click" IsEnabled="{x:Bind CanSummarize}" VerticalAlignment="Top"/>
+                                <Button Grid.Column="2" Content="Export" Tag="{x:Bind Id}" Click="ExportNotes_Click" VerticalAlignment="Top"/>
+                            </Grid>
+                            <Pivot Grid.Row="1">
+                                <PivotItem Header="Notes">
+                                    <ScrollViewer><StackPanel Spacing="18" Padding="0,14,12,20">
+                                        <TextBlock Text="{x:Bind SummaryStatus}" Style="{StaticResource MutedTextStyle}"/>
+                                        <TextBlock Text="{x:Bind Summary}" TextWrapping="Wrap" IsTextSelectionEnabled="True" LineHeight="24"/>
+                                        <TextBlock Text="✧  Key Points" FontSize="18" FontWeight="SemiBold"/>
+                                        <ItemsControl ItemsSource="{x:Bind KeyPoints}"><ItemsControl.ItemTemplate><DataTemplate x:DataType="x:String"><Grid ColumnSpacing="12" Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="•"/><TextBlock Grid.Column="1" Text="{x:Bind}" TextWrapping="Wrap" IsTextSelectionEnabled="True" LineHeight="23"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                                        <ItemsControl ItemsSource="{x:Bind Topics}"><ItemsControl.ItemTemplate><DataTemplate x:DataType="notes:NoteTopic"><StackPanel Spacing="8" Margin="0,0,0,14"><TextBlock Text="{x:Bind Title}" FontWeight="SemiBold"/><ItemsControl ItemsSource="{x:Bind Points}"><ItemsControl.ItemTemplate><DataTemplate x:DataType="x:String"><TextBlock Text="{x:Bind}" TextWrapping="Wrap" IsTextSelectionEnabled="True" LineHeight="23" Margin="0,0,0,8"/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                                        <TextBlock Text="☑  Action Items" FontSize="18" FontWeight="SemiBold"/>
+                                        <ItemsControl ItemsSource="{x:Bind ActionItems}"><ItemsControl.ItemTemplate><DataTemplate x:DataType="notes:ActionItemView"><Grid ColumnSpacing="10" Margin="0,0,0,14"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><CheckBox IsChecked="{x:Bind Done, Mode=TwoWay}" VerticalAlignment="Top" AutomationProperties.Name="{x:Bind Text}"/><StackPanel Grid.Column="1" Spacing="5"><TextBlock Text="{x:Bind Text}" TextWrapping="Wrap" LineHeight="23" TextDecorations="{x:Bind local:NoteTakerPage.Decorations(Done)}" Foreground="{x:Bind local:NoteTakerPage.TextBrush(Done)}"/><TextBlock Text="{x:Bind Kind}" Style="{StaticResource MutedTextStyle}"/></StackPanel><StackPanel Grid.Column="2" Spacing="6"><Border CornerRadius="4" Background="{StaticResource ChipBrush}" Padding="8,3"><TextBlock Text="{x:Bind DueText}" FontSize="11"/></Border><TextBlock Text="{x:Bind AssigneeText}" FontSize="11"/></StackPanel></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                                    </StackPanel></ScrollViewer>
+                                </PivotItem>
+                                <PivotItem Header="Recording &amp; Transcript">
+                                    <ScrollViewer><StackPanel Spacing="16" Padding="0,14,12,20">
+                                        <StackPanel Orientation="Horizontal" Spacing="8"><Button Content="Play recording" Tag="{x:Bind AudioPath}" Click="PlayRecording_Click"/><Button Content="Transcribe again" Tag="{x:Bind Id}" Click="TranscribeAgain_Click" IsEnabled="{x:Bind CanTranscribe}"/></StackPanel>
+                                        <TextBox Header="Tags (press Enter to save)" Text="{x:Bind Tags}" Tag="{x:Bind Id}" KeyDown="Tags_KeyDown"/>
+                                        <ItemsControl ItemsSource="{x:Bind Turns}"><ItemsControl.ItemTemplate><DataTemplate x:DataType="notes:TranscriptTurn"><StackPanel Spacing="8" Margin="0,0,0,22"><StackPanel Orientation="Horizontal" Spacing="12"><TextBlock Text="{x:Bind Speaker}" FontWeight="SemiBold"/><TextBlock Text="{x:Bind TimeText}" Style="{StaticResource MutedTextStyle}"/></StackPanel><TextBlock Text="{x:Bind Text}" TextWrapping="Wrap" IsTextSelectionEnabled="True" LineHeight="25" FontSize="14"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                                    </StackPanel></ScrollViewer>
+                                </PivotItem>
+                            </Pivot>
+                        </Grid>
+                    </DataTemplate>
+                </ContentControl.ContentTemplate>
+            </ContentControl>
+        </Grid>
+    </Grid>
 </Page>

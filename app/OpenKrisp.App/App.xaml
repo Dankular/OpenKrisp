@@ -4,9 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     RequestedTheme="Light">
 
-    <!-- Look: light theme only (does not follow the system dark mode), violet accent, soft lavender background,
-         white rounded cards, bold navy headings, Inter (bundled, SIL OFL) with Segoe UI as the fallback.
-         NOT yet seen rendered by the authors: written from reference images without a Windows machine. -->
+    <!-- White workspace, violet accent and compact typography. Inter is bundled under SIL OFL. -->
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -29,19 +27,19 @@
             <!-- Palette -->
             <SolidColorBrush x:Key="BrandBrush" Color="#5B4FE8" />
             <SolidColorBrush x:Key="BrandSoftBrush" Color="#E9E6FD" />
-            <SolidColorBrush x:Key="HeadingBrush" Color="#14123A" />
-            <SolidColorBrush x:Key="BodyBrush" Color="#25234A" />
-            <SolidColorBrush x:Key="MutedBrush" Color="#8A88A6" />
+            <SolidColorBrush x:Key="HeadingBrush" Color="#22242D" />
+            <SolidColorBrush x:Key="BodyBrush" Color="#444650" />
+            <SolidColorBrush x:Key="MutedBrush" Color="#737580" />
             <SolidColorBrush x:Key="DoneTextBrush" Color="#7C7A94" />
             <SolidColorBrush x:Key="CardBrush" Color="#FFFFFF" />
-            <SolidColorBrush x:Key="CardBorderBrush" Color="#ECE9FA" />
+            <SolidColorBrush x:Key="CardBorderBrush" Color="#E9EAEE" />
             <SolidColorBrush x:Key="ChipBrush" Color="#EFEFF5" />
             <SolidColorBrush x:Key="ChipOverdueBrush" Color="#FDE3E3" />
             <SolidColorBrush x:Key="RuleBrush" Color="#7FCFD4" />
 
             <LinearGradientBrush x:Key="AppBackgroundBrush" StartPoint="0,0" EndPoint="1,1">
-                <GradientStop Color="#E7E2FE" Offset="0" />
-                <GradientStop Color="#F6F4FF" Offset="0.45" />
+                <GradientStop Color="#F7F8FA" Offset="0" />
+                <GradientStop Color="#FFFFFF" Offset="0.45" />
                 <GradientStop Color="#FFFFFF" Offset="1" />
             </LinearGradientBrush>
 
@@ -50,27 +48,27 @@
             <SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="Transparent" />
             <SolidColorBrush x:Key="NavigationViewTopPaneBackground" Color="Transparent" />
             <SolidColorBrush x:Key="NavigationViewItemForeground" Color="#4B4870" />
-            <SolidColorBrush x:Key="NavigationViewItemForegroundSelected" Color="#14123A" />
+            <SolidColorBrush x:Key="NavigationViewItemForegroundSelected" Color="#22242D" />
 
             <!-- Shared styles -->
             <Style x:Key="CardStyle" TargetType="Border">
                 <Setter Property="Background" Value="{StaticResource CardBrush}" />
                 <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
                 <Setter Property="BorderThickness" Value="1" />
-                <Setter Property="CornerRadius" Value="20" />
-                <Setter Property="Padding" Value="28" />
+                <Setter Property="CornerRadius" Value="10" />
+                <Setter Property="Padding" Value="20" />
             </Style>
 
             <Style x:Key="PageTitleStyle" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource AppFont}" />
-                <Setter Property="FontSize" Value="30" />
+                <Setter Property="FontSize" Value="24" />
                 <Setter Property="FontWeight" Value="Bold" />
                 <Setter Property="Foreground" Value="{StaticResource HeadingBrush}" />
             </Style>
 
             <Style x:Key="CardTitleStyle" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource AppFont}" />
-                <Setter Property="FontSize" Value="20" />
+                <Setter Property="FontSize" Value="18" />
                 <Setter Property="FontWeight" Value="Bold" />
                 <Setter Property="Foreground" Value="{StaticResource HeadingBrush}" />
             </Style>

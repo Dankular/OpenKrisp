@@ -6,6 +6,7 @@ public sealed class ActionItemData
 {
     public List<Meeting> Meetings { get; set; } = new();
     public List<ActionItem> Items { get; set; } = new();
+    public int ExtractionVersion { get; set; }
 }
 
 /// <summary>JSON-file backed store of meetings and their action items. Every mutation is saved immediately.</summary>
@@ -22,6 +23,18 @@ public sealed class ActionItemStore
     }
 
     public event Action? Changed;
+
+    public void InitializeAutomaticExtraction()
+    {
+        if (_data.ExtractionVersion >= 1) return;
+        lock (_gate)
+        {
+            if (File.Exists(_path) && !File.Exists(_path + ".before-automatic-extraction")) File.Copy(_path, _path + ".before-automatic-extraction");
+            foreach (var meeting in _data.Meetings) MergeInsights(meeting, MeetingInsightExtractor.Extract(meeting, meeting.Transcript), replace: false);
+            _data.ExtractionVersion = 1;
+            JsonFile.Save(_path, _data);
+        }
+    }
 
     public IReadOnlyList<Meeting> Meetings { get { lock (_gate) return _data.Meetings.ToList(); } }
     public IReadOnlyList<ActionItem> Items { get { lock (_gate) return _data.Items.ToList(); } }
@@ -49,14 +62,135 @@ public sealed class ActionItemStore
         return item;
     }
 
+    private static string SentenceTitle(string title)
+    {
+        var line = title.ReplaceLineEndings(" ").Trim().Trim('"');
+        line = new System.Text.RegularExpressions.Regex(@"(?<=[.!?])\s+(?=[A-Z])").Split(line, 2)[0];
+        if (line.Length > 197) line = line[..197].TrimEnd() + "...";
+        if (line.Length > 0 && !".!?".Contains(line[^1])) line += ".";
+        return line;
+    }
+
+    public void SetTitle(Guid meetingId, string title)
+    {
+        if (string.IsNullOrWhiteSpace(title)) return;
+        Mutate(() => _data.Meetings.Single(m => m.Id == meetingId).Title = SentenceTitle(title));
+    }
+
+    public void SetOrganization(Guid meetingId, string kind, string tags)
+    {
+        Mutate(() =>
+        {
+            var meeting = _data.Meetings.Single(m => m.Id == meetingId);
+            meeting.Kind = kind == "Lecture" ? "Lecture" : "Meeting";
+            meeting.Tags = tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Distinct(StringComparer.OrdinalIgnoreCase).Take(30).ToList();
+        });
+    }
+
+    public void SaveTranscript(Guid meetingId, IReadOnlyList<TranscriptTurn> turns, string audioPath)
+    {
+        if (turns.Any(t => !double.IsFinite(t.Start) || !double.IsFinite(t.End) || t.Start < 0 || t.End < t.Start
+            || string.IsNullOrWhiteSpace(t.Text) || string.IsNullOrWhiteSpace(t.Speaker)))
+            throw new ArgumentException("Invalid transcript turns.", nameof(turns));
+        Mutate(() =>
+        {
+            var meeting = _data.Meetings.Single(m => m.Id == meetingId);
+            meeting.Transcript = turns.OrderBy(t => t.Start).ToList();
+            meeting.TranscriptRevision++;
+            meeting.AudioPath = audioPath;
+            meeting.Summary = "";
+            meeting.KeyPoints.Clear();
+            meeting.Topics.Clear();
+            meeting.SummarizedAt = null;
+            MergeInsights(meeting, MeetingInsightExtractor.Extract(meeting, meeting.Transcript), replace: true);
+        });
+    }
+
+    public void SaveSummary(Guid meetingId, int transcriptRevision, MeetingSummary summary)
+    {
+        if (string.IsNullOrWhiteSpace(summary.Summary)) throw new ArgumentException("The model returned an empty summary.");
+        Mutate(() =>
+        {
+            var meeting = _data.Meetings.Single(m => m.Id == meetingId);
+            if (meeting.TranscriptRevision != transcriptRevision) throw new InvalidOperationException("The transcript changed; summarize it again.");
+            var actions = new List<ActionItem>();
+            foreach (var action in summary.ActionItems.Where(a => !string.IsNullOrWhiteSpace(a.Text)))
+            {
+                // Keep only commitments supported by a literal quote from this transcript.
+                if (string.IsNullOrWhiteSpace(action.Evidence) || !meeting.Transcript.Any(t => t.Text.Contains(action.Evidence, StringComparison.OrdinalIgnoreCase))) continue;
+                if (actions.Any(a => string.Equals(a.Text, action.Text.Trim(), StringComparison.OrdinalIgnoreCase))) continue;
+                var previous = _data.Items.FirstOrDefault(i => i.MeetingId == meetingId && i.GeneratedFromTranscript && (string.Equals(i.Text, action.Text.Trim(), StringComparison.OrdinalIgnoreCase) || string.Equals(i.Evidence, action.Evidence, StringComparison.OrdinalIgnoreCase)));
+                DateOnly? due = DateOnly.TryParseExact(action.Due, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out var date) && action.Evidence.Contains(action.Due) ? date : null;
+                var source = meeting.Transcript.First(t => t.Text.Contains(action.Evidence, StringComparison.OrdinalIgnoreCase));
+                if (previous?.UserEdited == true) { actions.Add(previous); continue; }
+                if (meeting.SuppressedActionEvidence.Contains(action.Evidence, StringComparer.OrdinalIgnoreCase)) continue;
+                actions.Add(new ActionItem {
+                    Id = previous?.Id ?? Guid.NewGuid(), MeetingId = meetingId, Text = action.Text.Trim(),
+                    Assignee = !string.IsNullOrWhiteSpace(action.Assignee) && meeting.Transcript.Any(t =>
+                        string.Equals(t.Speaker, action.Assignee, StringComparison.OrdinalIgnoreCase) || t.Text.Contains(action.Assignee, StringComparison.OrdinalIgnoreCase))
+                        ? action.Assignee : "", Due = due, Evidence = action.Evidence,
+                    CapturedAt = meeting.StartedAt.AddSeconds(source.Start), GeneratedFromTranscript = true, Done = previous?.Done ?? false,
+                });
+            }
+            MergeInsights(meeting, actions, replace: false);
+            meeting.Summary = summary.Summary;
+            meeting.KeyPoints = summary.KeyPoints.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
+            meeting.Topics = summary.Topics;
+            meeting.SummarizedAt = DateTimeOffset.Now;
+        });
+    }
+
     public bool SetDone(Guid id, bool done) => Update(id, i => i.Done = done);
-    public bool SetDue(Guid id, DateOnly? due) => Update(id, i => i.Due = due);
-    public bool SetAssignee(Guid id, string assignee) => Update(id, i => i.Assignee = assignee);
+    public bool SetDue(Guid id, DateOnly? due) => Update(id, i => { i.Due = due; i.UserEdited = true; });
+    public bool SetAssignee(Guid id, string assignee) => Update(id, i => { i.Assignee = assignee.Trim(); i.UserEdited = true; });
+
+    public bool EditItem(Guid id, string text, string assignee, DateOnly? due, string kind)
+    {
+        if (string.IsNullOrWhiteSpace(text)) throw new ArgumentException("An item needs text.");
+        if (kind is not ("Task" or "Decision" or "Follow-up")) throw new ArgumentException("Unknown item type.");
+        return Update(id, i => { i.Text = text.Trim(); i.Assignee = assignee.Trim(); i.Due = due; i.Kind = kind; i.UserEdited = true; });
+    }
+
+    public void UpdateLiveInsights(Guid meetingId, IReadOnlyList<TranscriptTurn> turns)
+    {
+        lock (_gate)
+        {
+            var meeting = _data.Meetings.Single(m => m.Id == meetingId);
+            var found = MeetingInsightExtractor.Extract(meeting, turns, completeSentencesOnly: true);
+            if (found.All(f => _data.Items.Any(i => i.MeetingId == meetingId && SameEvidence(i, f)) || meeting.SuppressedActionEvidence.Contains(f.Evidence, StringComparer.OrdinalIgnoreCase))) return;
+            MergeInsights(meeting, found, replace: false);
+            JsonFile.Save(_path, _data);
+        }
+        Changed?.Invoke();
+    }
+
+    private static bool SameEvidence(ActionItem a, ActionItem b) => a.Evidence.Length > 0 && string.Equals(a.Evidence, b.Evidence, StringComparison.OrdinalIgnoreCase);
+
+    private void MergeInsights(Meeting meeting, IReadOnlyList<ActionItem> candidates, bool replace)
+    {
+        var old = _data.Items.Where(i => i.MeetingId == meeting.Id && i.GeneratedFromTranscript).ToList();
+        if (replace) _data.Items.RemoveAll(i => i.MeetingId == meeting.Id && i.GeneratedFromTranscript && !i.UserEdited);
+        foreach (var item in candidates)
+        {
+            if (meeting.SuppressedActionEvidence.Contains(item.Evidence, StringComparer.OrdinalIgnoreCase)) continue;
+            var previous = old.FirstOrDefault(i => SameEvidence(i, item));
+            if (_data.Items.Any(i => i.MeetingId == meeting.Id && SameEvidence(i, item))) continue;
+            if (previous is not null) { item.Id = previous.Id; item.Done = previous.Done; }
+            _data.Items.Add(item);
+        }
+    }
 
     public bool Remove(Guid id)
     {
         var removed = false;
-        Mutate(() => removed = _data.Items.RemoveAll(i => i.Id == id) > 0);
+        Mutate(() => {
+            var item = _data.Items.FirstOrDefault(i => i.Id == id);
+            if (item is { GeneratedFromTranscript: true } && item.Evidence.Length > 0)
+                _data.Meetings.Single(m => m.Id == item.MeetingId).SuppressedActionEvidence.Add(item.Evidence);
+            removed = _data.Items.RemoveAll(i => i.Id == id) > 0;
+        });
         return removed;
     }
 

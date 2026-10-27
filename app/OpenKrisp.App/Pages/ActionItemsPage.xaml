@@ -1,0 +1,64 @@
+<Page x:Class="OpenKrisp.App.Pages.ActionItemsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:notes="using:OpenKrisp.Core.Notes"
+      xmlns:local="using:OpenKrisp.App.Pages">
+    <Grid Padding="28,20,28,24" RowSpacing="18" Background="White">
+        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+        <Grid ColumnSpacing="12">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+            <StackPanel Spacing="6">
+                <TextBlock Text="Action items" Style="{StaticResource PageTitleStyle}" />
+                <TextBlock Text="Tasks, decisions and follow-ups across your local meetings." TextWrapping="Wrap" />
+                <TextBlock Text="{x:Bind Vm.CountText, Mode=OneWay}" Style="{StaticResource MutedTextStyle}" />
+            </StackPanel>
+            <Button Grid.Column="1" Content="Add item" Click="AddItem_Click" Style="{StaticResource AccentButtonStyle}" VerticalAlignment="Top" />
+            <Button Grid.Column="2" Content="Export list" Click="Export_Click" VerticalAlignment="Top" />
+        </Grid>
+        <StackPanel Grid.Row="1" Spacing="10">
+            <SelectorBar x:Name="Views" SelectionChanged="Views_SelectionChanged">
+                <SelectorBarItem x:Name="Mine" Text="Assigned to me" />
+                <SelectorBarItem x:Name="All" Text="All action items" IsSelected="True" />
+            </SelectorBar>
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="180" /></Grid.ColumnDefinitions>
+                <TextBox PlaceholderText="Search items, meetings, owners and source quotes" Text="{x:Bind Vm.Search, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                <ComboBox Grid.Column="1" SelectedIndex="{x:Bind Vm.KindIndex, Mode=TwoWay}" HorizontalAlignment="Stretch">
+                    <ComboBoxItem Content="All types" /><ComboBoxItem Content="Tasks" /><ComboBoxItem Content="Decisions" /><ComboBoxItem Content="Follow-ups" />
+                </ComboBox>
+            </Grid>
+            <TextBlock Text="Explicit English commitments and decisions are extracted automatically from recorded audio. Assign an item to Me to include it in your personal view."
+                       Style="{StaticResource MutedTextStyle}" TextWrapping="Wrap" />
+        </StackPanel>
+        <ListView Grid.Row="2" ItemsSource="{x:Bind Vm.Items, Mode=OneWay}" SelectionMode="None" HorizontalContentAlignment="Stretch">
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="notes:ActionItemView">
+                    <Border BorderBrush="#ECEDEF" BorderThickness="0,0,0,1" Padding="0,18" Margin="0">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <CheckBox IsChecked="{x:Bind Done, Mode=TwoWay}" AutomationProperties.Name="{x:Bind Text}" VerticalAlignment="Top" />
+                            <StackPanel Grid.Column="1" Spacing="6">
+                                <TextBlock Text="{x:Bind Kind}" FontWeight="SemiBold" FontSize="11" Foreground="{StaticResource BrandBrush}" />
+                                <TextBlock Text="{x:Bind Text}" TextWrapping="Wrap" IsTextSelectionEnabled="True" LineHeight="24"
+                                           TextDecorations="{x:Bind local:NoteTakerPage.Decorations(Done)}" Foreground="{x:Bind local:NoteTakerPage.TextBrush(Done)}" />
+                                <TextBlock Text="{x:Bind MeetingTitle}" Style="{StaticResource MutedTextStyle}" TextWrapping="Wrap" />
+                                <StackPanel Orientation="Horizontal" Spacing="16">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <Border CornerRadius="12" Width="24" Height="24" Background="{x:Bind local:NoteTakerPage.AvatarFill(AvatarColorIndex)}"><TextBlock Text="{x:Bind AssigneeInitial}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="11" /></Border>
+                                        <TextBlock Text="{x:Bind AssigneeText}" FontSize="12" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <Border Background="{x:Bind local:NoteTakerPage.DueBackground(IsOverdue)}" CornerRadius="4" Padding="8,4"><TextBlock Text="{x:Bind DueText}" FontSize="11" /></Border>
+                                </StackPanel>
+                                <TextBlock Text="{x:Bind Evidence}" Style="{StaticResource MutedTextStyle}" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Spacing="8">
+                                <Button Content="Edit" Tag="{x:Bind Id}" Click="Edit_Click" />
+                                <Button Content="Delete" Tag="{x:Bind Id}" Click="Delete_Click" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+    </Grid>
+</Page>

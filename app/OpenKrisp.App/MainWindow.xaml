@@ -7,13 +7,24 @@
     <Grid Background="{StaticResource AppBackgroundBrush}">
         <NavigationView
             x:Name="Nav"
-            PaneDisplayMode="Top"
+            PaneDisplayMode="Left"
+            OpenPaneLength="196"
+            IsPaneToggleButtonVisible="False"
+            IsPaneOpen="True"
             IsBackButtonVisible="Collapsed"
             IsSettingsVisible="False"
             SelectionChanged="Nav_SelectionChanged">
+            <NavigationView.PaneHeader>
+                <StackPanel Padding="18,20,12,24" Spacing="5">
+                    <TextBlock Text="OpenKrisp" FontSize="21" FontWeight="Bold" Foreground="{StaticResource HeadingBrush}" />
+                    <TextBlock Text="Local workspace" Style="{StaticResource MutedTextStyle}" />
+                </StackPanel>
+            </NavigationView.PaneHeader>
             <NavigationView.MenuItems>
+                <NavigationViewItem Content="Meetings" Tag="notes" Icon="Document" />
+                <NavigationViewItem Content="Action items" Tag="actions" Icon="List" />
                 <NavigationViewItem Content="Noise cancellation" Tag="noise" Icon="Microphone" />
-                <NavigationViewItem Content="Note taker" Tag="notes" Icon="Document" />
+                <NavigationViewItem Content="Status" Tag="status" Icon="Setting" />
             </NavigationView.MenuItems>
             <Frame x:Name="ContentFrame" />
         </NavigationView>

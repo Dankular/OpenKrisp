@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- WinUI 3, unpackaged, self-contained Windows App SDK. Windows only: this project cannot be built on Linux/macOS.
-       NOT built or run yet (the dev sandbox has no Windows). See ../README.md. -->
+  <!-- WinUI 3, unpackaged Windows x64 application with bundled .NET and Windows App SDK. -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
@@ -13,11 +12,13 @@
     <UseWinUI>true</UseWinUI>
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="NAudio" Version="2.2.1" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260921001" />
   </ItemGroup>
 
@@ -43,6 +44,14 @@
     </None>
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\..\notes\*.py;..\..\notes\*.txt">
+      <Link>notes\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
   <!-- WinUI resources are build outputs and must accompany an unpackaged publish. -->
   <Target Name="CopyWinUIResourcesToPublish" AfterTargets="Publish">
     <ItemGroup>
@@ -52,5 +61,9 @@
     <Copy SourceFiles="@(WinUIResource)"
           DestinationFiles="@(WinUIResource->'$(PublishDir)%(RecursiveDir)%(Filename)%(Extension)')"
           SkipUnchangedFiles="true" />
+    <!-- Switching between framework-dependent and self-contained builds can leave
+         newer, incompatible metadata in an existing publish directory. -->
+    <Copy SourceFiles="$(TargetDir)$(AssemblyName).runtimeconfig.json;$(TargetDir)$(AssemblyName).deps.json"
+          DestinationFolder="$(PublishDir)" SkipUnchangedFiles="false" />
   </Target>
 </Project>

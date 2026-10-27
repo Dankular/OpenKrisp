@@ -28,7 +28,7 @@ but the live-audio and Windows parts have never been run on real hardware. [Stat
 - **Cleaning incoming audio needs a virtual speaker.** The incoming lane captures what a playback device plays. Capturing and playing on the same device would loop,
   so applications must play into a virtual speaker, which OpenKrisp captures and cleans before playing on your real speakers. No virtual speaker driver is chosen or included.
   (The microphone side uses MicyWMD, which provides only a virtual microphone.)
-- **Meeting notes.** No recording, transcription or automatic action items. A local speech-to-text model and a local language model are planned; neither is chosen or tested.
+- **Meeting and lecture notes.** Local recording, Whistle transcription on Tract CUDA in seven languages, Smart Turn semantic turn detection, live/final speaker labels, searchable transcripts, tags and filters. Each transcript has a Summarize button for local BART key points and topic sections; automatic source-backed tasks, decisions and follow-ups have their own dashboard; see [app/README.md](app/README.md).
 - **A downloadable release.** There is none yet; see [Getting a Windows build](#getting-a-windows-build).
 - **Anything proven on hardware.** The Windows app has never been built or run, and live audio, the MicyWMD driver path and the app's device handling have never touched a real device.
 

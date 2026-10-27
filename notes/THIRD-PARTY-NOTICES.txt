@@ -1,0 +1,23 @@
+Whistle host pipeline
+---------------------
+notes/whistle_tract.py adapts the host frontend, engram lookup and DTW word
+timestamp algorithms from mrfakename/whistle-ONNX, revision
+14fc92cb09ad5c271fe9a4ec4be70274790050d2, licensed under Apache-2.0.
+Source: https://huggingface.co/mrfakename/whistle-ONNX
+License: https://www.apache.org/licenses/LICENSE-2.0
+The ASR model is Cactus Compute Whistle, not a Whisper transcription model.
+
+Smart Turn
+----------
+The downloaded Smart Turn v3 ONNX model is distributed by onnx-community,
+based on pipecat-ai/smart-turn-v3, under the BSD-2-Clause license.
+Source: https://huggingface.co/onnx-community/smart-turn-v3-ONNX
+Inference/preprocessing reference: https://github.com/pipecat-ai/smart-turn
+Its Whisper-derived encoder is used solely for end-of-turn classification.
+
+Other downloaded models
+-----------------------
+Supra Title: https://huggingface.co/SupraLabs/supra-title-50m-pre
+BART ONNX: https://huggingface.co/Xenova/bart-large-cnn
+Segmentation/embeddings: https://github.com/k2-fsa/sherpa-onnx
+Model weights retain their upstream licenses and are not committed to this repository.

@@ -5,6 +5,16 @@ public sealed class Meeting
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Title { get; set; } = "";
     public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.Now;
+    public List<TranscriptTurn> Transcript { get; set; } = new();
+    public int TranscriptRevision { get; set; }
+    public string Summary { get; set; } = "";
+    public List<string> KeyPoints { get; set; } = new();
+    public DateTimeOffset? SummarizedAt { get; set; }
+    public string AudioPath { get; set; } = "";
+    public string Kind { get; set; } = "Meeting";
+    public List<string> Tags { get; set; } = new();
+    public List<NoteTopic> Topics { get; set; } = new();
+    public List<string> SuppressedActionEvidence { get; set; } = new();
 }
 
 public sealed class ActionItem
@@ -21,11 +31,15 @@ public sealed class ActionItem
     /// <summary>Empty = unassigned, <see cref="Me"/> = the user, otherwise a display name.</summary>
     public string Assignee { get; set; } = "";
     public bool Done { get; set; }
+    public bool GeneratedFromTranscript { get; set; }
+    public string Evidence { get; set; } = "";
+    public string Kind { get; set; } = "Task";
+    public bool UserEdited { get; set; }
 }
 
 public sealed record ExtractedActionItem(string Text, string? Assignee, DateOnly? Due);
 
-/// <summary>Turns a transcript into action items. No implementation exists yet: a local language model has not been chosen.</summary>
+/// <summary>Legacy text-only extractor. The note-taking workflow uses ILocalNotesWorker for structured local summaries.</summary>
 public interface IActionItemExtractor
 {
     bool IsAvailable { get; }

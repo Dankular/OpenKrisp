@@ -4,14 +4,120 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using OpenKrisp.Core.Notes;
 using Windows.System;
+using Windows.Storage.Pickers;
+using Windows.Storage;
+using System.Text;
 
 namespace OpenKrisp.App.Pages;
 
 public sealed partial class NoteTakerPage : Page
 {
-    public NoteTakerPage() => InitializeComponent();
+    public NoteTakerPage()
+    {
+        InitializeComponent();
+        Loaded += (_, _) => { NotesVm.PropertyChanged += NotesChanged; RenderMeter(); };
+        Unloaded += (_, _) => NotesVm.PropertyChanged -= NotesChanged;
+    }
+
+    private void NotesChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(NoteTakerViewModel.PeakDb) or nameof(NoteTakerViewModel.SpeechThresholdPercent) or nameof(NoteTakerViewModel.TurnThresholdPercent))
+            DispatcherQueue.TryEnqueue(RenderMeter);
+        if (e.PropertyName == nameof(NoteTakerViewModel.LiveTurns)) DispatcherQueue.TryEnqueue(() => {
+            if (LiveTranscriptList.Items.Count > 0) LiveTranscriptList.ScrollIntoView(LiveTranscriptList.Items[^1]);
+        });
+    }
+
+    private void LevelTrack_SizeChanged(object sender, SizeChangedEventArgs e) => RenderMeter();
+
+    private void RenderMeter()
+    {
+        if (LevelTrack is null || LevelFill is null || SpeechCutoffMarker is null || TurnCutoffMarker is null) return;
+        var width = LevelTrack.ActualWidth;
+        double Position(double db) => width * Math.Clamp((db + 60) / 60, 0, 1);
+        LevelFill.Clip = new RectangleGeometry { Rect = new Windows.Foundation.Rect(0, 0, Position(NotesVm.PeakDb), LevelTrack.ActualHeight) };
+        RmsFill.Width = Position(NotesVm.RmsDb);
+        HeldPeakMarker.Margin = new Thickness(Math.Clamp(Position(NotesVm.HeldPeakDb), 0, Math.Max(0, width - 2)), 0, 0, 0);
+        SpeechCutoffMarker.Margin = new Thickness(Math.Clamp(SpeechConfidenceTrack.ActualWidth * NotesVm.SpeechThresholdPercent/100,0,Math.Max(0,SpeechConfidenceTrack.ActualWidth-3)),0,0,0);
+        TurnCutoffMarker.Margin = new Thickness(Math.Clamp(TurnConfidenceTrack.ActualWidth * NotesVm.TurnThresholdPercent/100,0,Math.Max(0,TurnConfidenceTrack.ActualWidth-3)),0,0,0);
+    }
 
     public ActionItemsViewModel Vm => App.ActionVm;
+    public NoteTakerViewModel NotesVm => App.NotesVm;
+
+    private async void SetUpModels_Click(object sender, RoutedEventArgs e) => await App.Runtime.InitializeAsync();
+    private async void Record_Click(object sender, RoutedEventArgs e) => await NotesVm.StartRecordingAsync(RecordingTitleBox.Text);
+    private async void StopRecording_Click(object sender, RoutedEventArgs e) => await NotesVm.StopRecordingAsync();
+    private void CancelProcessing_Click(object sender, RoutedEventArgs e) => NotesVm.Cancel();
+    private void SpeakerCount_Changed(NumberBox sender, NumberBoxValueChangedEventArgs args)
+        => NotesVm.ExpectedSpeakers = double.IsFinite(args.NewValue) ? (int)Math.Clamp(args.NewValue, 0, 20) : 0;
+
+    private async void ImportAudio_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var picker = new FileOpenPicker();
+            foreach (var extension in new[] { ".wav", ".mp3", ".m4a", ".flac", ".ogg", ".mp4", ".wma" }) picker.FileTypeFilter.Add(extension);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow));
+            if (await picker.PickSingleFileAsync() is { } file) await NotesVm.ImportAsync(file.Path, RecordingTitleBox.Text);
+        }
+        catch (Exception error) { await ShowErrorAsync(error.Message); }
+    }
+
+    private async void Summarize_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: Guid id }) await NotesVm.SummarizeAsync(id);
+    }
+
+    private async void TranscribeAgain_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: Guid id }) await NotesVm.TranscribeMeetingAsync(id);
+    }
+
+    private void Tags_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == VirtualKey.Enter && sender is TextBox { Tag: Guid id } box) NotesVm.SaveTags(id, box.Text);
+    }
+
+    private async void PlayRecording_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (sender is Button { Tag: string path } && File.Exists(path))
+                await Launcher.LaunchFileAsync(await StorageFile.GetFileFromPathAsync(path));
+        }
+        catch (Exception error) { await ShowErrorAsync(error.Message); }
+    }
+
+    private async void ExportNotes_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: Guid id }) return;
+        try
+        {
+            var card = NotesVm.Transcripts.Single(t => t.Id == id);
+            var picker = new FileSavePicker { SuggestedFileName = card.Title };
+            picker.FileTypeChoices.Add("Markdown notes", new List<string> { ".md" });
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow));
+            if (await picker.PickSaveFileAsync() is not { } file) return;
+            var text = new StringBuilder().AppendLine("# " + card.Title).AppendLine()
+                .AppendLine("Tags: " + card.Tags).AppendLine().AppendLine(card.Summary).AppendLine().AppendLine("## Key points");
+            foreach (var point in card.KeyPoints) text.AppendLine("- " + point);
+            foreach (var topic in card.Topics)
+            {
+                text.AppendLine().AppendLine("## " + topic.Title);
+                foreach (var point in topic.Points) text.AppendLine("- " + point);
+            }
+            text.AppendLine().AppendLine("## Action items");
+            foreach (var item in card.ActionItems) text.AppendLine($"- [{(item.Done ? "x" : " ")}] {item.Text} ({item.AssigneeText})");
+            text.AppendLine().AppendLine("## Transcript");
+            foreach (var turn in card.Turns) text.AppendLine($"[{turn.TimeText}] {turn.Speaker}: {turn.Text}").AppendLine();
+            await FileIO.WriteTextAsync(file, text.ToString());
+        }
+        catch (Exception error) { await ShowErrorAsync(error.Message); }
+    }
+
+    private async Task ShowErrorAsync(string message)
+        => await new ContentDialog { Title = "Note taker", Content = message, CloseButtonText = "OK", XamlRoot = XamlRoot }.ShowAsync();
 
     // Function bindings used by the XAML.
     public static bool Not(bool value) => !value;
@@ -41,34 +147,4 @@ public sealed partial class NoteTakerPage : Page
 
     private static SolidColorBrush Solid((byte R, byte G, byte B) c) => new(Windows.UI.Color.FromArgb(0xFF, c.R, c.G, c.B));
 
-    private void FilterBar_SelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args)
-        => Vm.Filter = ReferenceEquals(sender.SelectedItem, AllItem) ? ActionItemFilter.All : ActionItemFilter.AssignedToMe;
-
-    private void AddMeeting_Click(object sender, RoutedEventArgs e) => AddMeeting();
-
-    private void NewMeetingBox_KeyDown(object sender, KeyRoutedEventArgs e)
-    {
-        if (e.Key == VirtualKey.Enter) AddMeeting();
-    }
-
-    private void AddMeeting()
-    {
-        var title = NewMeetingBox.Text.Trim();
-        if (title.Length == 0) return;
-        Vm.AddMeeting(title);
-        NewMeetingBox.Text = "";
-    }
-
-    private void AddItemBox_KeyDown(object sender, KeyRoutedEventArgs e)
-    {
-        if (e.Key != VirtualKey.Enter || sender is not TextBox { Tag: Guid meetingId } box) return;
-        var text = box.Text.Trim();
-        if (text.Length == 0) return;
-        Vm.AddItem(meetingId, text); // rebuilds the list, so the box is recreated empty
-    }
-
-    private void Remove_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button { Tag: Guid id }) Vm.RemoveItem(id);
-    }
 }
