@@ -32,3 +32,9 @@ Read from the source (not run):
 2. `cargo run --example tone -p virtualmic -- i32 10`, with "MicyAudio" chosen as the microphone in Sound settings (watch the input level meter) or in a recording app.
 3. If you hear a clean 440 Hz tone: the format is right. If noise or the wrong pitch: repeat with `f32`, then `i16`. Record which one works in this file.
 4. Watch for glitches over several minutes; if audio drifts late, the ring is filling and the pacing in the sender needs a correction loop.
+
+## The incoming-audio lane needs a virtual *speaker*
+
+MicyWMD provides only a microphone. To clean what you hear, applications must play into a virtual speaker that OpenKrisp captures (loopback) and then plays, cleaned,
+on the real speakers. Capturing and playing on the same device would loop, and the engine refuses that. Of the projects read, Virtual-Audio-Driver ships a virtual speaker
+(beta, needs test signing); whether its speaker works for this purpose has not been tested. See `crates/engine/src/session.rs`.

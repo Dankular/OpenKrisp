@@ -1,7 +1,8 @@
 <Page
     x:Class="OpenKrisp.App.Pages.NoiseCancellationPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:OpenKrisp.App.Pages">
 
     <ScrollViewer>
         <StackPanel Spacing="16" Padding="32" MaxWidth="680" HorizontalAlignment="Left">
@@ -52,6 +53,58 @@
 
             <TextBlock Text="{x:Bind Vm.StatusText, Mode=OneWay}" Opacity="0.7" TextWrapping="Wrap" />
             <TextBlock Text="{x:Bind Vm.Error, Mode=OneWay}" Foreground="{ThemeResource SystemFillColorCriticalBrush}" TextWrapping="Wrap" />
+
+            <!-- Live audio routing -->
+            <TextBlock Text="Audio routing" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,16,0,0" />
+
+            <ComboBox Header="Microphone" MinWidth="360"
+                      IsEnabled="{x:Bind Routing.IsAvailable}"
+                      ItemsSource="{x:Bind Routing.Inputs, Mode=OneWay}" DisplayMemberPath="Display"
+                      SelectedItem="{x:Bind Routing.MicInput, Mode=TwoWay}" />
+
+            <ComboBox Header="Send the cleaned microphone to" MinWidth="360"
+                      IsEnabled="{x:Bind Routing.IsAvailable}"
+                      SelectedIndex="{x:Bind Routing.MicSinkIndex, Mode=TwoWay}">
+                <x:String>Nowhere (microphone lane off)</x:String>
+                <x:String>OpenKrisp virtual microphone (MicyAudio driver)</x:String>
+                <x:String>A playback device</x:String>
+            </ComboBox>
+
+            <ComboBox Header="Playback device for the microphone" MinWidth="360"
+                      Visibility="{x:Bind local:NoiseCancellationPage.VisibleWhen(Routing.ShowMicSinkDevice), Mode=OneWay}"
+                      ItemsSource="{x:Bind Routing.Outputs, Mode=OneWay}" DisplayMemberPath="Display"
+                      SelectedItem="{x:Bind Routing.MicSinkDevice, Mode=TwoWay}" />
+
+            <ComboBox Header="Incoming audio: capture from" MinWidth="360"
+                      IsEnabled="{x:Bind Routing.IsAvailable}"
+                      ItemsSource="{x:Bind Routing.IncomingSources, Mode=OneWay}" DisplayMemberPath="Display"
+                      SelectedItem="{x:Bind Routing.IncomingSource, Mode=TwoWay}" />
+
+            <ComboBox Header="Play the cleaned incoming audio on" MinWidth="360"
+                      IsEnabled="{x:Bind Routing.IsAvailable}"
+                      ItemsSource="{x:Bind Routing.Outputs, Mode=OneWay}" DisplayMemberPath="Display"
+                      SelectedItem="{x:Bind Routing.IncomingOutput, Mode=TwoWay}" />
+
+            <TextBlock x:Name="IncomingHelp" Opacity="0.7" TextWrapping="Wrap" />
+
+            <Expander Header="Advanced">
+                <ComboBox Header="Sample format written to the virtual microphone driver" MinWidth="360"
+                          SelectedIndex="{x:Bind Routing.MicyFormatIndex, Mode=TwoWay}">
+                    <x:String>32-bit integer</x:String>
+                    <x:String>32-bit float</x:String>
+                    <x:String>16-bit integer</x:String>
+                </ComboBox>
+            </Expander>
+
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="Start" Style="{StaticResource AccentButtonStyle}"
+                        IsEnabled="{x:Bind Routing.CanStart, Mode=OneWay}" Click="Start_Click" />
+                <Button Content="Stop" IsEnabled="{x:Bind Routing.IsRunning, Mode=OneWay}" Click="Stop_Click" />
+                <Button Content="Refresh devices" Click="RefreshDevices_Click" />
+            </StackPanel>
+
+            <TextBlock Text="{x:Bind Routing.StatusText, Mode=OneWay}" Opacity="0.7" TextWrapping="Wrap" />
+            <TextBlock Text="{x:Bind Routing.Error, Mode=OneWay}" Foreground="{ThemeResource SystemFillColorCriticalBrush}" TextWrapping="Wrap" />
         </StackPanel>
     </ScrollViewer>
 </Page>

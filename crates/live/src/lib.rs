@@ -20,6 +20,11 @@ use ringbuf::{HeapCons, HeapProd, HeapRb};
 
 pub const BLOCK: usize = 480; // 10 ms at 48 kHz
 
+/// Ring-buffer traits (`push_slice`, `pop_slice`, `occupied_len`...) for users of `Tx`/`Rx`.
+pub mod traits {
+    pub use ringbuf::traits::{Consumer, Observer, Producer};
+}
+
 pub type Tx = HeapProd<f32>;
 pub type Rx = HeapCons<f32>;
 
@@ -38,6 +43,17 @@ pub struct Stats {
     pub max_block_us: AtomicU64,
 }
 
+/// Anything that turns blocks of 48 kHz mono audio into processed audio (the full pipeline, or one engine lane).
+pub trait BlockProcessor: Send + 'static {
+    fn process(&mut self, input: &[f32], out: &mut Vec<f32>) -> Result<()>;
+}
+
+impl<V: Vad + Send + 'static> BlockProcessor for Pipeline<V> {
+    fn process(&mut self, input: &[f32], out: &mut Vec<f32>) -> Result<()> {
+        Pipeline::process(self, input, out)
+    }
+}
+
 pub struct Worker {
     stop: Arc<AtomicBool>,
     handle: Option<JoinHandle<Result<()>>>,
@@ -47,14 +63,30 @@ pub struct Worker {
 impl Worker {
     /// `input` supplies 48 kHz mono samples; processed samples go to `output`. The output ring is first primed
     /// with `prefill_samples` of silence so a playback callback does not start dry.
-    pub fn spawn<V: Vad + Send + 'static>(
-        mut pipeline: Pipeline<V>,
+    pub fn spawn<P: BlockProcessor>(
+        pipeline: P,
+        input: Rx,
+        output: Tx,
+        prefill_samples: usize,
+    ) -> Worker {
+        Self::spawn_with_stats(
+            pipeline,
+            input,
+            output,
+            prefill_samples,
+            Arc::new(Stats::default()),
+        )
+    }
+
+    /// Like `spawn`, but the caller supplies the `Stats` the worker updates (so it can be read from elsewhere).
+    pub fn spawn_with_stats<P: BlockProcessor>(
+        mut pipeline: P,
         mut input: Rx,
         mut output: Tx,
         prefill_samples: usize,
+        stats: Arc<Stats>,
     ) -> Worker {
         let stop = Arc::new(AtomicBool::new(false));
-        let stats = Arc::new(Stats::default());
         let (s, st) = (stop.clone(), stats.clone());
         let handle = std::thread::Builder::new()
             .name("openkrisp-worker".into())

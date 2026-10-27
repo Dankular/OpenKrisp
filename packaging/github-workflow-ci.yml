@@ -70,7 +70,8 @@ jobs:
       - name: Build Rust (engine DLL, CLI, virtual-mic spike tool)
         shell: pwsh
         run: |
-          cargo build --release -p openkrisp-engine -p voiceclean
+          cargo build --release -p openkrisp-engine --features audio
+          cargo build --release -p voiceclean
           cargo build --release -p virtualmic --example tone
 
       - name: Download model for tests

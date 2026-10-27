@@ -22,8 +22,11 @@ VARIANTS = {
     "enh_only": ["--no-gate", "--no-agc"],
     "gate_la0": ["--no-agc", "--lookahead-ms", "0"],
     "gate_la30": ["--no-agc", "--lookahead-ms", "30"],
+    # AGC2's stock start is +15 dB (meant for the start of a call). "full" is the pipeline default: a 0 dB start.
+    "full_init15": ["--lookahead-ms", "30", "--agc-initial-gain-db", "15"],
     "full": ["--lookahead-ms", "30"],
 }
+SKIPS_S = (0, 8)  # seconds excluded from the start; 8 s removes AGC2's start-up transient
 BASE = "https://huggingface.co/datasets/Ceva-IP/DPDFNet_EvalSet/resolve/main"
 
 
@@ -60,7 +63,8 @@ def frame_rms_db(x, n=320):
     return 10 * np.log10((f ** 2).mean(1) + 1e-12)
 
 
-def metrics(clean, est):
+def metrics(clean, est, skip_s=0):
+    clean, est = clean[skip_s * 16000:], est[skip_s * 16000:]
     clean, est, lag = align(clean, est)
     cdb = frame_rms_db(clean)
     mask = cdb < np.percentile(cdb, 95) - 40
@@ -93,20 +97,23 @@ def main():
             if r.returncode:
                 raise SystemExit(r.stderr)
     rows = []
-    for c, (noisy, clean) in data.items():
-        n = min(len(noisy), len(clean))
-        rows.append(dict(clip=c, variant="noisy", **metrics(clean[:n], noisy[:n])))
-        for v in VARIANTS:
-            y = sf.read(f"{work}/{c}_{v}.wav", dtype="float32")[0]
-            rows.append(dict(clip=c, variant=v, **metrics(clean, resample_poly(y, 1, 3).astype(np.float32))))
+    for skip in SKIPS_S:
+        for c, (noisy, clean) in data.items():
+            n = min(len(noisy), len(clean))
+            rows.append(dict(clip=c, variant="noisy", skip_s=skip, **metrics(clean[:n], noisy[:n], skip)))
+            for v in VARIANTS:
+                y = sf.read(f"{work}/{c}_{v}.wav", dtype="float32")[0]
+                rows.append(dict(clip=c, variant=v, skip_s=skip, **metrics(clean, resample_poly(y, 1, 3).astype(np.float32), skip)))
     with open(f"{work}/results.csv", "w", newline="") as f:
         w = csv.DictWriter(f, rows[0].keys()); w.writeheader(); w.writerows(rows)
-    print(f"{'variant':10s} {'SI-SDR':>7s} {'STOI':>6s} {'PESQ-wb':>8s} {'noise-only dBFS':>16s}")
-    for v in ["noisy", *VARIANTS]:
-        r = [x for x in rows if x["variant"] == v]
-        print(f"{v:10s} {np.mean([x['sisdr'] for x in r]):7.2f} {np.mean([x['stoi'] for x in r]):6.3f} "
-              f"{np.mean([x['pesq'] for x in r]):8.2f} {np.mean([x['noise_only_dbfs'] for x in r]):16.1f}")
-    print("noise-only frame fraction (clean-based mask): mean %.2f" % np.mean([x["noise_frames"] for x in rows]))
+    for skip in SKIPS_S:
+        print(f"\n--- first {skip} s excluded ---")
+        print(f"{'variant':16s} {'SI-SDR':>7s} {'STOI':>6s} {'PESQ-wb':>8s} {'noise-only dBFS':>16s}")
+        for v in ["noisy", *VARIANTS]:
+            r = [x for x in rows if x["variant"] == v and x["skip_s"] == skip]
+            print(f"{v:16s} {np.mean([x['sisdr'] for x in r]):7.2f} {np.mean([x['stoi'] for x in r]):6.3f} "
+                  f"{np.mean([x['pesq'] for x in r]):8.2f} {np.mean([x['noise_only_dbfs'] for x in r]):16.1f}")
+    print("\nnoise-only frame fraction (clean-based mask): mean %.2f" % np.mean([x["noise_frames"] for x in rows]))
 
 
 if __name__ == "__main__":

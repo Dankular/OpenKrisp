@@ -9,6 +9,7 @@ license.workspace = true
 [dependencies]
 anyhow.workspace = true
 pipeline = { path = "../pipeline" }
+resample = { path = "../resample" }
 ringbuf = "0.5"
 cpal = { version = "0.18", optional = true }
 

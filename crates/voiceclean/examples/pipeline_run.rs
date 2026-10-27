@@ -17,6 +17,8 @@ fn main() -> Result<()> {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     let mut cfg = Config::default();
     let mut lookahead = 30.0f32;
+    // start from the pipeline's own default AGC settings, then apply flags
+    let mut agc_cfg = cfg.agc.expect("the default config has AGC");
     let mut gate_on = true;
     let mut i = 0;
     while i < args.len() {
@@ -24,11 +26,20 @@ fn main() -> Result<()> {
             "--no-gate" => gate_on = false,
             "--no-agc" => cfg.agc = None,
             "--agc-flag" => cfg.agc_speech = AgcSpeech::Flag,
-            "--lookahead-ms" => {
-                lookahead = args
+            "--lookahead-ms"
+            | "--agc-initial-gain-db"
+            | "--agc-max-noise-dbfs"
+            | "--agc-max-gain-db" => {
+                let v: f32 = args
                     .get(i + 1)
                     .and_then(|v| v.parse().ok())
-                    .ok_or_else(|| anyhow::anyhow!("--lookahead-ms needs a number"))?;
+                    .ok_or_else(|| anyhow::anyhow!("{} needs a number", args[i]))?;
+                match args[i].as_str() {
+                    "--lookahead-ms" => lookahead = v,
+                    "--agc-initial-gain-db" => agc_cfg.initial_gain_db = v,
+                    "--agc-max-noise-dbfs" => agc_cfg.max_output_noise_level_dbfs = v,
+                    _ => agc_cfg.max_gain_db = v,
+                }
                 args.remove(i + 1);
             }
             _ => {
@@ -37,6 +48,9 @@ fn main() -> Result<()> {
             }
         }
         args.remove(i);
+    }
+    if cfg.agc.is_some() {
+        cfg.agc = Some(agc_cfg);
     }
     cfg.gate = gate_on.then(|| GateConfig {
         lookahead_ms: lookahead,

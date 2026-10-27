@@ -3,7 +3,7 @@ using System.Text;
 namespace OpenKrisp.Core.Engine;
 
 /// <summary>Owns one native engine instance. Thread-safe for the control calls (the native side uses atomics).</summary>
-public sealed class EngineHost : IEngineController, IDisposable
+public sealed class EngineHost : IEngineController, IAudioController, IDisposable
 {
     private IntPtr _handle;
 
@@ -52,6 +52,57 @@ public sealed class EngineHost : IEngineController, IDisposable
         Check(NativeMethods.vc_process(Handle, (int)lane, input, (nuint)input.Length, buf, (nuint)buf.Length, out var written), nameof(Process));
         return buf.AsSpan(0, (int)written).ToArray();
     }
+
+    public IReadOnlyList<string> ListDevices(bool capture)
+    {
+        var buf = new byte[64 * 1024];
+        var n = NativeMethods.vc_audio_list_devices(capture ? 0 : 1, buf, (nuint)buf.Length);
+        if (n == -4) throw new EngineException("This build of the engine has no live audio support.");
+        if (n < 0) throw new EngineException($"Listing audio devices failed (engine error {n})");
+        var text = Encoding.UTF8.GetString(buf, 0, n);
+        return text.Length == 0 ? Array.Empty<string>() : text.Split('\n');
+    }
+
+    public void StartAudio(AudioConfig config)
+    {
+        IntPtr micIn = IntPtr.Zero, micSink = IntPtr.Zero, loop = IntPtr.Zero, spkOut = IntPtr.Zero;
+        try
+        {
+            micIn = Utf8(config.MicInput);
+            micSink = Utf8(config.MicSinkDevice);
+            loop = Utf8(config.SpeakerLoopback);
+            spkOut = Utf8(config.SpeakerOutput);
+            var native = new NativeMethods.VcAudioConfig
+            {
+                MicInput = micIn, MicSink = (int)config.MicSink, MicSinkDevice = micSink,
+                MicyFormat = (int)config.MicyFormat, SpeakerLoopback = loop, SpeakerOutput = spkOut,
+            };
+            var err = new byte[1024];
+            var rc = NativeMethods.vc_audio_start(Handle, ref native, err, (nuint)err.Length);
+            if (rc != 0)
+            {
+                var n = Array.IndexOf(err, (byte)0);
+                var msg = Encoding.UTF8.GetString(err, 0, n < 0 ? err.Length : n);
+                throw new EngineException(msg.Length > 0 ? msg : $"Starting audio failed (engine error {rc})");
+            }
+        }
+        finally
+        {
+            foreach (var p in new[] { micIn, micSink, loop, spkOut })
+                if (p != IntPtr.Zero) System.Runtime.InteropServices.Marshal.FreeCoTaskMem(p);
+        }
+    }
+
+    public void StopAudio() => Check(NativeMethods.vc_audio_stop(Handle), nameof(StopAudio));
+
+    public AudioStats GetAudioStats()
+    {
+        Check(NativeMethods.vc_audio_get_stats(Handle, out var s), nameof(GetAudioStats));
+        return new AudioStats(s.Running != 0, s.MicInputDropped, s.MicOutputUnderrunFrames, s.SpeakerInputDropped,
+            s.SpeakerOutputUnderrunFrames, s.MicWorkerMaxBlockUs, s.SpeakerWorkerMaxBlockUs);
+    }
+
+    private static IntPtr Utf8(string? s) => s is null ? IntPtr.Zero : System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(s);
 
     private IntPtr Handle => _handle != IntPtr.Zero ? _handle : throw new ObjectDisposedException(nameof(EngineHost));
 

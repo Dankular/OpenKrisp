@@ -12,10 +12,25 @@ public sealed partial class NoiseCancellationPage : Page
     {
         InitializeComponent();
         IsolationDescription.Text = NoiseCancellationViewModel.IsolationDescription;
-        _timer.Tick += (_, _) => Vm.Refresh();
+        IncomingHelp.Text = AudioRoutingViewModel.IncomingHelp;
+        _timer.Tick += (_, _) =>
+        {
+            Vm.Refresh();
+            Routing.Refresh();
+        };
         Loaded += (_, _) => _timer.Start();
         Unloaded += (_, _) => _timer.Stop();
     }
 
     public NoiseCancellationViewModel Vm => App.NoiseVm;
+
+    public AudioRoutingViewModel Routing => App.RoutingVm;
+
+    public static Visibility VisibleWhen(bool value) => value ? Visibility.Visible : Visibility.Collapsed;
+
+    private async void Start_Click(object sender, RoutedEventArgs e) => await Routing.StartAsync();
+
+    private void Stop_Click(object sender, RoutedEventArgs e) => Routing.Stop();
+
+    private void RefreshDevices_Click(object sender, RoutedEventArgs e) => Routing.RefreshDevices();
 }

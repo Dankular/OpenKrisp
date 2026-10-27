@@ -13,6 +13,7 @@ public partial class App : Application
 
     /// <summary>Shared view models; the pages read these.</summary>
     public static NoiseCancellationViewModel NoiseVm { get; private set; } = null!;
+    public static AudioRoutingViewModel RoutingVm { get; private set; } = null!;
     public static ActionItemsViewModel ActionVm { get; private set; } = null!;
 
     public App() => InitializeComponent();
@@ -21,10 +22,15 @@ public partial class App : Application
     {
         _engine = TryStartEngine(out var reason);
         NoiseVm = new NoiseCancellationViewModel(_engine, reason, new JsonSettingsStore());
+        RoutingVm = new AudioRoutingViewModel(_engine, new JsonSettingsStore());
         ActionVm = new ActionItemsViewModel(new ActionItemStore());
 
         _window = new MainWindow();
-        _window.Closed += (_, _) => _engine?.Dispose();
+        _window.Closed += (_, _) =>
+        {
+            RoutingVm.Stop();
+            _engine?.Dispose();
+        };
         _window.Activate();
     }
 

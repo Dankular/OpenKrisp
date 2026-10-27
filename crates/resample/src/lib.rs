@@ -4,6 +4,9 @@
 //! Group delay is `(TAPS - 1) / 2` input samples (48 at 48 kHz = 1 ms). The first output corresponds to
 //! input sample 0 with the filter's history initialised to zeros.
 
+pub mod rational;
+pub use rational::Resampler;
+
 const FACTOR: usize = 3;
 /// Odd, so the filter is symmetric with an integer delay.
 const TAPS: usize = 97;

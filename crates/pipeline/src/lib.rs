@@ -39,11 +39,31 @@ pub struct Config {
 
 impl Default for Config {
     fn default() -> Self {
+        // AGC2's stock initial gain is +15 dB (meant for the start of a call, when the level is unknown). Measured on
+        // six eval clips it dominated the AGC's cost: SI-SDR 5.0 dB with it vs 12.9 dB with a 0 dB start (enhancement
+        // alone: 13.7). See docs/eval.md. The gain still adapts upward at the controller's 6 dB/s limit.
+        let agc = AdaptiveDigitalConfig {
+            initial_gain_db: 0.0,
+            ..AdaptiveDigitalConfig::default()
+        };
         Self {
             gate: Some(GateConfig::default()),
-            agc: Some(AdaptiveDigitalConfig::default()),
+            agc: Some(agc),
             agc_speech: AgcSpeech::Probability,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_agc_starts_at_zero_gain() {
+        let cfg = Config::default();
+        assert_eq!(cfg.agc.unwrap().initial_gain_db, 0.0);
+        // the other AGC2 defaults are untouched
+        assert_eq!(cfg.agc.unwrap().max_output_noise_level_dbfs, -50.0);
     }
 }
 

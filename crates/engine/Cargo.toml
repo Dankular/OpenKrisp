@@ -13,3 +13,9 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 anyhow.workspace = true
 dpdf = { path = "../dpdf" }
+live = { path = "../live", optional = true }
+virtualmic = { path = "../virtualmic", optional = true }
+
+[features]
+# Live audio sessions (capture -> lane -> sink) through cpal; needs libasound2-dev on Linux. Enabled for Windows builds.
+audio = ["dep:live", "live/audio", "dep:virtualmic"]

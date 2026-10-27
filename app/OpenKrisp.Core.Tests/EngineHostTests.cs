@@ -67,6 +67,31 @@ public class EngineHostTests
         Assert.NotEqual(x.Take(x.Length - 480), y.Skip(480));
     }
 
+    [SkippableFact]
+    public void Audio_calls_are_wired_through_the_native_library()
+    {
+        using var e = CreateOrSkip();
+        // Stats before any session: zeros and not running (valid in every build).
+        var s = e.GetAudioStats();
+        Assert.False(s.Running);
+        Assert.Equal(0ul, s.MicInputDropped);
+        e.StopAudio(); // no-op when nothing runs
+
+        // Device listing works only in a build with the `audio` feature; otherwise the engine reports "no live audio".
+        try
+        {
+            var inputs = e.ListDevices(capture: true);
+            Assert.NotNull(inputs); // a CI machine may have no devices: an empty list is fine
+        }
+        catch (EngineException ex)
+        {
+            // no `audio` feature in this build, or a machine with no usable audio host (CI runners)
+            Assert.True(
+                ex.Message.Contains("no live audio support") || ex.Message.Contains("Listing audio devices failed"),
+                ex.Message);
+        }
+    }
+
     [Fact]
     public void A_missing_model_gives_a_readable_error()
     {

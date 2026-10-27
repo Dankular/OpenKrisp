@@ -13,6 +13,8 @@
 //! Audio device I/O is not part of this crate; the host feeds blocks to `process`.
 
 mod ffi;
+#[cfg(feature = "audio")]
+pub mod session;
 
 use std::path::Path;
 use std::sync::Mutex;
