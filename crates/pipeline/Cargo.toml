@@ -1,0 +1,14 @@
+[package]
+name = "pipeline"
+description = "Full voice cleanup chain: DPDFNet -> VAD -> soft gate (lookahead) -> AGC2 + limiter"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+agc = { path = "../agc" }
+dpdf = { path = "../dpdf" }
+gate = { path = "../gate" }
+resample = { path = "../resample" }

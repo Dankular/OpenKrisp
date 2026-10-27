@@ -1,0 +1,17 @@
+[package]
+name = "live"
+description = "Real-time plumbing: lock-free rings + worker thread around the pipeline, optional cpal device layer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+pipeline = { path = "../pipeline" }
+ringbuf = "0.5"
+cpal = { version = "0.18", optional = true }
+
+[features]
+# Device capture/playback through cpal (WASAPI on Windows). Needs libasound2-dev on Linux.
+audio = ["dep:cpal"]

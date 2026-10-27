@@ -12,13 +12,25 @@ dpdf = { path = "../dpdf" }
 hound.workspace = true
 sonora-agc2 = "0.2.0"
 agc = { path = "../agc" }
+pipeline = { path = "../pipeline" }
+live = { path = "../live", optional = true }
 resample = { path = "../resample" }
 tenvad = { path = "../tenvad", optional = true }
 
 [features]
 # Needs libten_vad at link time: set TEN_VAD_LIB_DIR (see crates/tenvad/build.rs).
 vad = ["dep:tenvad"]
+# Live microphone -> speakers demo (cpal; WASAPI on Windows).
+audio = ["vad", "dep:live", "live/audio"]
 
 [[example]]
 name = "agc_demo"
 required-features = ["vad"]
+
+[[example]]
+name = "pipeline_run"
+required-features = ["vad"]
+
+[[example]]
+name = "live"
+required-features = ["audio"]
