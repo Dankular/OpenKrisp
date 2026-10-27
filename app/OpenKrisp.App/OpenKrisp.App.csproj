@@ -43,4 +43,14 @@
     </None>
   </ItemGroup>
 
+  <!-- WinUI resources are build outputs and must accompany an unpackaged publish. -->
+  <Target Name="CopyWinUIResourcesToPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <WinUIResource Include="$(TargetDir)**\*.xbf" />
+      <WinUIResource Include="$(TargetDir)$(AssemblyName).pri" />
+    </ItemGroup>
+    <Copy SourceFiles="@(WinUIResource)"
+          DestinationFiles="@(WinUIResource->'$(PublishDir)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
 </Project>
