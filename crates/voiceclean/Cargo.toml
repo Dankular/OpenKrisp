@@ -12,6 +12,7 @@ dpdf = { path = "../dpdf" }
 hound.workspace = true
 sonora-agc2 = "0.2.0"
 agc = { path = "../agc" }
+resample = { path = "../resample" }
 tenvad = { path = "../tenvad", optional = true }
 
 [features]
