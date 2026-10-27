@@ -1,0 +1,11 @@
+[package]
+name = "agc"
+description = "AGC2-style adaptive digital gain + limiter wired from sonora-agc2 components, driven by an external speech probability"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+sonora-agc2 = "0.2"

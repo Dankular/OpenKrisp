@@ -10,3 +10,14 @@ license.workspace = true
 anyhow.workspace = true
 dpdf = { path = "../dpdf" }
 hound.workspace = true
+sonora-agc2 = "0.2.0"
+agc = { path = "../agc" }
+tenvad = { path = "../tenvad", optional = true }
+
+[features]
+# Needs libten_vad at link time: set TEN_VAD_LIB_DIR (see crates/tenvad/build.rs).
+vad = ["dep:tenvad"]
+
+[[example]]
+name = "agc_demo"
+required-features = ["vad"]
