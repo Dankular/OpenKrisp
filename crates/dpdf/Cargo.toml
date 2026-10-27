@@ -1,0 +1,12 @@
+[package]
+name = "dpdf"
+description = "Streaming DPDFNet speech enhancer (tract-onnx), port of dpdfnet.StreamEnhancer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+realfft.workspace = true
+tract-onnx.workspace = true

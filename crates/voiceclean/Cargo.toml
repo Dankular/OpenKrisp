@@ -1,0 +1,12 @@
+[package]
+name = "voiceclean"
+description = "Local voice cleanup pipeline CLI"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+dpdf = { path = "../dpdf" }
+hound.workspace = true
