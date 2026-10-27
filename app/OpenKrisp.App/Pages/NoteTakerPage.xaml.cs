@@ -23,9 +23,6 @@ public sealed partial class NoteTakerPage : Page
     {
         if (e.PropertyName == nameof(NoteTakerViewModel.PeakDb))
             DispatcherQueue.TryEnqueue(RenderMeter);
-        if (e.PropertyName == nameof(NoteTakerViewModel.LiveTurns)) DispatcherQueue.TryEnqueue(() => {
-            if (LiveTranscriptList.Items.Count > 0) LiveTranscriptList.ScrollIntoView(LiveTranscriptList.Items[^1]);
-        });
     }
 
     private void LevelTrack_SizeChanged(object sender, SizeChangedEventArgs e) => RenderMeter();

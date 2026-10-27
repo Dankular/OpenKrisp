@@ -37,7 +37,7 @@
                 <Button Content="Set up / load local models" Click="SetUpModels_Click" IsEnabled="{x:Bind NotesVm.CanSetUp, Mode=OneWay}"/>
             </StackPanel>
         </Expander>
-        <Expander Grid.Row="3" Header="Live audio and detection" IsExpanded="{x:Bind NotesVm.IsRecording, Mode=OneWay}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+        <Expander Grid.Row="3" Header="Live audio and detection" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
             <ScrollViewer MaxHeight="440">
                 <StackPanel Spacing="10">
                     <Border BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="16">
@@ -83,15 +83,18 @@
                         </StackPanel>
                     </Border>
                     <TextBlock Text="{x:Bind NotesVm.LiveStatus, Mode=OneWay}" Style="{StaticResource MutedTextStyle}" TextWrapping="Wrap"/>
-                    <ListView x:Name="LiveTranscriptList" ItemsSource="{x:Bind NotesVm.LiveTurns, Mode=OneWay}" MaxHeight="180" SelectionMode="None">
-                        <ListView.ItemTemplate><DataTemplate x:DataType="notes:TranscriptTurn">
-                            <StackPanel Spacing="5" Padding="0,6"><StackPanel Orientation="Horizontal" Spacing="12"><TextBlock Text="{x:Bind Speaker}" FontWeight="SemiBold"/><TextBlock Text="{x:Bind TimeText}" Style="{StaticResource MutedTextStyle}"/></StackPanel><TextBlock Text="{x:Bind Text}" TextWrapping="Wrap" IsTextSelectionEnabled="True" LineHeight="23"/></StackPanel>
-                        </DataTemplate></ListView.ItemTemplate>
-                    </ListView>
                 </StackPanel>
             </ScrollViewer>
         </Expander>
-        <Grid Grid.Row="4" ColumnSpacing="24">
+        <Grid Grid.Row="4" RowSpacing="12" Visibility="{x:Bind local:NoteTakerPage.VisibleWhen(NotesVm.IsRecording), Mode=OneWay}">
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+            <StackPanel Spacing="4">
+                <TextBlock Text="Live transcript" FontSize="24" FontWeight="SemiBold"/>
+                <TextBlock Text="{x:Bind NotesVm.LiveStatus, Mode=OneWay}" Style="{StaticResource MutedTextStyle}" TextWrapping="Wrap"/>
+            </StackPanel>
+            <local:TranscriptPrompter Grid.Row="1" IsLive="True" Turns="{x:Bind NotesVm.LiveTurns, Mode=OneWay}"/>
+        </Grid>
+        <Grid Grid.Row="4" ColumnSpacing="24" Visibility="{x:Bind local:NoteTakerPage.HiddenWhen(NotesVm.IsRecording), Mode=OneWay}">
             <Grid.ColumnDefinitions><ColumnDefinition Width="210"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
             <Grid RowSpacing="10">
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
@@ -112,7 +115,7 @@
                                 <Button Grid.Column="1" Content="Summarize" Style="{StaticResource AccentButtonStyle}" Tag="{x:Bind Id}" Click="Summarize_Click" IsEnabled="{x:Bind CanSummarize}" VerticalAlignment="Top"/>
                                 <Button Grid.Column="2" Content="Export" Tag="{x:Bind Id}" Click="ExportNotes_Click" VerticalAlignment="Top"/>
                             </Grid>
-                            <Pivot Grid.Row="1">
+                            <Pivot Grid.Row="1" SelectedIndex="1">
                                 <PivotItem Header="Notes">
                                     <ScrollViewer><StackPanel Spacing="18" Padding="0,14,12,20">
                                         <TextBlock Text="{x:Bind SummaryStatus}" Style="{StaticResource MutedTextStyle}"/>
@@ -137,12 +140,13 @@
                                         <ItemsControl ItemsSource="{x:Bind Tasks}"><ItemsControl.ItemTemplate><DataTemplate x:DataType="notes:ActionItemView"><Grid ColumnSpacing="10" Margin="0,0,0,14"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><CheckBox IsChecked="{x:Bind Done, Mode=TwoWay}" VerticalAlignment="Top" AutomationProperties.Name="{x:Bind Text}"/><StackPanel Grid.Column="1" Spacing="5"><TextBlock Text="{x:Bind Text}" TextWrapping="Wrap" LineHeight="23" TextDecorations="{x:Bind local:NoteTakerPage.Decorations(Done)}" Foreground="{x:Bind local:NoteTakerPage.TextBrush(Done)}"/><TextBlock Text="{x:Bind Kind}" Style="{StaticResource MutedTextStyle}"/></StackPanel><StackPanel Grid.Column="2" Spacing="6"><Border CornerRadius="4" Background="{StaticResource ChipBrush}" Padding="8,3"><TextBlock Text="{x:Bind DueText}" FontSize="11"/></Border><TextBlock Text="{x:Bind AssigneeText}" FontSize="11"/></StackPanel></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
                                     </StackPanel></ScrollViewer>
                                 </PivotItem>
-                                <PivotItem Header="Recording &amp; Transcript">
-                                    <ScrollViewer><StackPanel Spacing="16" Padding="0,14,12,20">
+                                <PivotItem Header="Transcript">
+                                    <Grid RowSpacing="12" Padding="0,10,0,0">
+                                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                                         <StackPanel Orientation="Horizontal" Spacing="8"><Button Content="Play recording" Tag="{x:Bind AudioPath}" Click="PlayRecording_Click"/><Button Content="Transcribe again" Tag="{x:Bind Id}" Click="TranscribeAgain_Click" IsEnabled="{x:Bind CanTranscribe}"/></StackPanel>
-                                        <TextBox Header="Tags (press Enter to save)" Text="{x:Bind Tags}" Tag="{x:Bind Id}" KeyDown="Tags_KeyDown"/>
-                                        <ItemsControl ItemsSource="{x:Bind Turns}"><ItemsControl.ItemTemplate><DataTemplate x:DataType="notes:TranscriptTurn"><StackPanel Spacing="8" Margin="0,0,0,22"><StackPanel Orientation="Horizontal" Spacing="12"><TextBlock Text="{x:Bind Speaker}" FontWeight="SemiBold"/><TextBlock Text="{x:Bind TimeText}" Style="{StaticResource MutedTextStyle}"/></StackPanel><TextBlock Text="{x:Bind Text}" TextWrapping="Wrap" IsTextSelectionEnabled="True" LineHeight="25" FontSize="14"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-                                    </StackPanel></ScrollViewer>
+                                        <TextBox Grid.Row="1" PlaceholderText="Tags (press Enter to save)" Text="{x:Bind Tags}" Tag="{x:Bind Id}" KeyDown="Tags_KeyDown" AutomationProperties.Name="Meeting tags"/>
+                                        <local:TranscriptPrompter Grid.Row="2" Turns="{x:Bind Turns}"/>
+                                    </Grid>
                                 </PivotItem>
                             </Pivot>
                         </Grid>
