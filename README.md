@@ -4,7 +4,7 @@ OpenKrisp is an open-source, on-device voice cleanup tool in the spirit of Krisp
 microphone, and from the audio you hear on a call, using a neural speech enhancer running on the CPU. Nothing leaves your machine.
 
 It is written in Rust, with a Windows control app (WinUI 3) on top. It is an early project: the audio processing is measured and tested,
-but the live-audio and Windows parts have never been run on real hardware. [Status](#status) says exactly what is and is not proven.
+the Windows app has been built and launched, and local CUDA ASR has processed audio. Acoustic echo attenuation on a selected microphone/speaker setup remains unmeasured.
 
 ## What it does today
 
@@ -22,15 +22,13 @@ but the live-audio and Windows parts have never been run on real hardware. [Stat
 
 ## What it does not do yet
 
-- **Voice isolation.** "Auto" is meant to remove nearby voices and echo on top of standard noise removal. The setting exists in the engine and the app, but neither
-  part is implemented, and the app says so. Echo removal looks feasible (a Rust port of WebRTC's echo canceller, `sonora-aec3`, exists, and the incoming-audio lane
-  could serve as its reference signal; its API has not been read yet). For nearby-voice removal no model has been chosen.
+- **Personal voiceprint isolation.** The Windows app has a selectable microphone / speaker-reference / virtual-output path using Windows acoustic echo cancellation followed by DPDFNet. Filtering unrelated nearby voices by personal voice identity is not implemented.
 - **Cleaning incoming audio needs a virtual speaker.** The incoming lane captures what a playback device plays. Capturing and playing on the same device would loop,
   so applications must play into a virtual speaker, which OpenKrisp captures and cleans before playing on your real speakers. No virtual speaker driver is chosen or included.
   (The microphone side uses MicyWMD, which provides only a virtual microphone.)
 - **Meeting and lecture notes.** Local recording, Whistle transcription on Tract CUDA in seven languages, Smart Turn semantic turn detection, live/final speaker labels, searchable transcripts, tags and filters. Each transcript has a Summarize button for local BART key points and topic sections; automatic source-backed tasks, decisions and follow-ups have their own dashboard; see [app/README.md](app/README.md).
 - **A downloadable release.** There is none yet; see [Getting a Windows build](#getting-a-windows-build).
-- **Anything proven on hardware.** The Windows app has never been built or run, and live audio, the MicyWMD driver path and the app's device handling have never touched a real device.
+- **Hardware validation limits.** Build/launch and real CUDA transcription have been checked. Acoustic echo attenuation for the selected devices and the MicyWMD driver path have not been validated.
 
 ## Getting a Windows build
 

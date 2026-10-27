@@ -14,8 +14,6 @@ internal sealed class LiveTranscriptSession : ILiveTranscript
     private readonly Task _run;
     private bool _disposed;
     private double _sentSeconds;
-    private float _speechThreshold = .5f, _turnThreshold = .5f;
-    public void SetDetectionThresholds(double speech, double turn) { _speechThreshold = (float)speech; _turnThreshold = (float)turn; }
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private sealed record PcmPacket(double Start, float[] Samples);
 
@@ -50,11 +48,9 @@ internal sealed class LiveTranscriptSession : ILiveTranscript
                 await foreach (var packet in _audio.Reader.ReadAllAsync())
                 {
                     var samples = packet.Samples;
-                    var header = new byte[20];
+                    var header = new byte[12];
                     BinaryPrimitives.WriteDoubleLittleEndian(header.AsSpan(0, 8), packet.Start);
                     BinaryPrimitives.WriteInt32LittleEndian(header.AsSpan(8, 4), samples.Length);
-                    BinaryPrimitives.WriteSingleLittleEndian(header.AsSpan(12, 4), _speechThreshold);
-                    BinaryPrimitives.WriteSingleLittleEndian(header.AsSpan(16, 4), _turnThreshold);
                     await _process.StandardInput.BaseStream.WriteAsync(header);
                     var bytes = new byte[samples.Length * sizeof(float)];
                     Buffer.BlockCopy(samples, 0, bytes, 0, bytes.Length);

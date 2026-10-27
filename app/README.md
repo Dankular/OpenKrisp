@@ -15,7 +15,7 @@ Whistle remains the ASR model in English, German, French, Spanish, Italian, Dutc
 
 [Smart Turn v3 ONNX](https://huggingface.co/onnx-community/smart-turn-v3-ONNX), revision `dbd03130e87854011fa8c2f203077f2cbfc3adad`, runs on Tract CUDA and predicts semantic end-of-turn probability from audio. Its Whisper-derived encoder is used only for turn classification; it does not transcribe audio or replace Whistle. Model turn endings and speaker changes determine paragraph boundaries. Fixed character-count and pause-based paragraph splitting are removed.
 
-Speech segmentation uses the existing pyannote model on Tract CPU. The live speech threshold controls its actual speech posterior. The separate Smart Turn threshold controls turn completion. Raw recording peaks/RMS remain visible on a green-to-red meter, independently of both model thresholds. Speaker embeddings and final clustering use sherpa-onnx with NeMo TitaNet; the expected speaker count defaults to two (zero selects automatic clustering).
+Speech segmentation uses the existing pyannote model on Tract CPU. Voice activity follows the model’s native powerset classification automatically. Smart Turn uses its trained binary classification to mark completed thoughts. Both confidence displays update from incoming audio and are read-only; there are no manual sensitivity thresholds. Raw recording peaks/RMS remain visible on a green-to-red meter. Speaker embeddings and final clustering use sherpa-onnx with NeMo TitaNet; the expected speaker count defaults to two (zero selects automatic clustering).
 
 Titles use [Supra Title 50M](https://huggingface.co/SupraLabs/supra-title-50m-pre) Q8 weights and a minimal CPU llama.cpp completion runtime. Summaries, key points and topic sections use quantized BART-large-CNN ONNX. These purpose-built note models replace Qwen. No PyTorch or TensorFlow dependency is installed.
 
@@ -48,6 +48,16 @@ dotnet run --project tools/LoopbackMic -- --route-only
 
 The helper preserves the hardware speaker route and saves/restores its previous routing. Create `stop.txt` beside the helper executable to stop it. Alternatively, select **Computer audio (speakers, YouTube, calls)** to capture playback directly through WASAPI.
 
+## My voice virtual microphone
+
+The Noise cancellation page provides selectable physical microphone, speaker echo reference and virtual-cable playback output. Windows Voice Capture DSP performs adaptive acoustic echo cancellation with synchronized source-mode capture; the existing Rust/Tract DPDFNet engine then suppresses background noise. No new ML framework or model download is needed for AEC. Confidence/level decisions are automatic.
+
+Choose the playback device carrying the audio you hear as the echo reference. The cleaned output must use a separate virtual cable (for example CABLE Input → CABLE Output); select its recording side in the calling app. A source/output identity check blocks direct feedback. B1 playback transcription remains a separate route. Voicemeeter’s extra In 1 / In 2 channels require a licensed VAIO extension; their presence in Windows does not guarantee an active route.
+
+The voice path reports running only after processed microphone samples reach the output. It keeps a silent reference stream open so capture continues while speaker playback is silent. This Windows DSP path currently captures mono 16 kHz audio, then resamples to 48 kHz for DPDFNet/output. It reuses the app’s existing noise engine; additional native audio routing must be stopped before starting this path. The microphone, reference and output selections persist.
+
+AEC targets the selected loudspeaker signal, including other people’s voices played through those speakers. It does not provide voiceprint isolation from unrelated people physically speaking nearby. Acoustic attenuation has not been measured on the user’s selected microphone/speaker setup.
+
 ## Build
 
 ```powershell
@@ -55,4 +65,4 @@ cargo build --release -p openkrisp-engine --features audio
 dotnet publish app/OpenKrisp.App -c Release -p:Platform=x64 -r win-x64 --self-contained true -o dist/OpenKrisp
 ```
 
-The publish includes .NET, Windows App SDK, compiled XAML and PRI resources. No separate .NET runtime installation is required. The noise-removal model is resolved from `OPENKRISP_MODEL` or `%LOCALAPPDATA%\OpenKrisp\models\dpdfnet2_48khz_hr.onnx`. Voice isolation, echo cancellation and nearby-voice removal remain unimplemented.
+The publish includes .NET, Windows App SDK, compiled XAML and PRI resources. No separate .NET runtime installation is required. The noise-removal model is resolved from `OPENKRISP_MODEL` or `%LOCALAPPDATA%\OpenKrisp\models\dpdfnet2_48khz_hr.onnx`. The My voice virtual-microphone path uses Windows acoustic echo cancellation followed by the same Rust/Tract DPDFNet engine. Personal voiceprint filtering of unrelated nearby voices remains unsupported.

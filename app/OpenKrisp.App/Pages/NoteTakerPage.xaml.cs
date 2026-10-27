@@ -21,7 +21,7 @@ public sealed partial class NoteTakerPage : Page
 
     private void NotesChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(NoteTakerViewModel.PeakDb) or nameof(NoteTakerViewModel.SpeechThresholdPercent) or nameof(NoteTakerViewModel.TurnThresholdPercent))
+        if (e.PropertyName == nameof(NoteTakerViewModel.PeakDb))
             DispatcherQueue.TryEnqueue(RenderMeter);
         if (e.PropertyName == nameof(NoteTakerViewModel.LiveTurns)) DispatcherQueue.TryEnqueue(() => {
             if (LiveTranscriptList.Items.Count > 0) LiveTranscriptList.ScrollIntoView(LiveTranscriptList.Items[^1]);
@@ -32,14 +32,12 @@ public sealed partial class NoteTakerPage : Page
 
     private void RenderMeter()
     {
-        if (LevelTrack is null || LevelFill is null || SpeechCutoffMarker is null || TurnCutoffMarker is null) return;
+        if (LevelTrack is null || LevelFill is null) return;
         var width = LevelTrack.ActualWidth;
         double Position(double db) => width * Math.Clamp((db + 60) / 60, 0, 1);
         LevelFill.Clip = new RectangleGeometry { Rect = new Windows.Foundation.Rect(0, 0, Position(NotesVm.PeakDb), LevelTrack.ActualHeight) };
         RmsFill.Width = Position(NotesVm.RmsDb);
         HeldPeakMarker.Margin = new Thickness(Math.Clamp(Position(NotesVm.HeldPeakDb), 0, Math.Max(0, width - 2)), 0, 0, 0);
-        SpeechCutoffMarker.Margin = new Thickness(Math.Clamp(SpeechConfidenceTrack.ActualWidth * NotesVm.SpeechThresholdPercent/100,0,Math.Max(0,SpeechConfidenceTrack.ActualWidth-3)),0,0,0);
-        TurnCutoffMarker.Margin = new Thickness(Math.Clamp(TurnConfidenceTrack.ActualWidth * NotesVm.TurnThresholdPercent/100,0,Math.Max(0,TurnConfidenceTrack.ActualWidth-3)),0,0,0);
     }
 
     public ActionItemsViewModel Vm => App.ActionVm;

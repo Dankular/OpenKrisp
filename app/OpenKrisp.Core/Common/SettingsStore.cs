@@ -13,6 +13,9 @@ public sealed class AppSettings
     public int MicyFormat { get; set; }            // 0 i32, 1 f32, 2 i16
     public string? IncomingSource { get; set; }    // null = incoming-audio lane off
     public string? IncomingOutput { get; set; }
+    public string? VoiceMicrophoneId { get; set; }
+    public string? VoiceSpeakerReferenceId { get; set; }
+    public string? VoiceVirtualOutputId { get; set; }
 }
 
 public interface ISettingsStore

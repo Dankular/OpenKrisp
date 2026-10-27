@@ -25,7 +25,7 @@ class SmartTurn:
         self.filters=np.maximum(0,np.minimum(lower,upper))*(2/(hz[2:]-hz[:-2]))
         self.window=np.hanning(401)[:-1]
 
-    def probability(self, audio):
+    def predict(self, audio):
         audio=np.asarray(audio[-128000:],np.float64)
         audio=np.pad(audio,(128000-len(audio),0))
         audio=(audio-audio.mean())/np.sqrt(audio.var()+1e-7)
@@ -36,4 +36,4 @@ class SmartTurn:
         mel=(np.maximum(mel,mel.max()-8)+4)/4
         features=np.ascontiguousarray(mel.T[None],np.float32)
         logit=float(self.model.run([features])[0].to_numpy().reshape(-1)[0])
-        return float(1/(1+np.exp(-np.clip(logit,-80,80))))
+        return {'probability':float(1/(1+np.exp(-np.clip(logit,-80,80)))), 'complete':logit>0}

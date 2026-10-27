@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using OpenKrisp.App.Notes;
+using OpenKrisp.App.Audio;
 using OpenKrisp.Core.Common;
 using OpenKrisp.Core.Engine;
 using OpenKrisp.Core.NoiseCancellation;
@@ -19,6 +20,7 @@ public partial class App : Application
     public static Window MainWindow => ((App)Current)._window!;
     public static ActionItemsViewModel ActionVm { get; private set; } = null!;
     public static TractRuntimeService Runtime { get; private set; } = null!;
+    public static VoiceMicrophoneService VoiceMicrophone { get; private set; } = null!;
 
     public App()
     {
@@ -40,6 +42,10 @@ public partial class App : Application
         _engine = TryStartEngine(out var reason);
         NoiseVm = new NoiseCancellationViewModel(_engine, reason, new JsonSettingsStore());
         RoutingVm = new AudioRoutingViewModel(_engine, new JsonSettingsStore());
+        VoiceMicrophone = new VoiceMicrophoneService(_engine, () => RoutingVm.IsRunning, () => {
+            NoiseVm.MyNoiseCancel = true; NoiseVm.VoiceIsolation = VoiceIsolationMode.Auto;
+        });
+        RoutingVm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(AudioRoutingViewModel.IsRunning)) VoiceMicrophone.NotifyRoutingChanged(); };
         var actionStore = new ActionItemStore();
         actionStore.InitializeAutomaticExtraction();
         ActionVm = new ActionItemsViewModel(actionStore);
@@ -58,9 +64,10 @@ public partial class App : Application
         _window.Closed += (_, _) =>
         {
             NotesVm.Dispose();
+            VoiceMicrophone.Dispose();
             Runtime.Dispose();
             RoutingVm.Stop();
-            _engine?.Dispose();
+            if (VoiceMicrophone.HasStopped) _engine?.Dispose();
         };
         _window.Activate();
         _ = Runtime.InitializeAsync();

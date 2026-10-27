@@ -6,6 +6,8 @@ namespace OpenKrisp.Core.Engine;
 public sealed class EngineHost : IEngineController, IAudioController, IDisposable
 {
     private IntPtr _handle;
+    private int _externalEchoCancellation;
+    public void SetExternalEchoCancellationActive(bool active) => Volatile.Write(ref _externalEchoCancellation, active ? 1 : 0);
 
     private EngineHost(IntPtr handle) => _handle = handle;
 
@@ -40,9 +42,10 @@ public sealed class EngineHost : IEngineController, IAudioController, IDisposabl
     public EngineStatus GetStatus()
     {
         Check(NativeMethods.vc_get_status(Handle, out var s), nameof(GetStatus));
+        var externalEcho = Volatile.Read(ref _externalEchoCancellation) != 0;
         return new EngineStatus(
             s.MicNc != 0, s.SpeakerNc != 0, s.VoiceIsolation == 1 ? VoiceIsolationMode.Auto : VoiceIsolationMode.Off,
-            s.VoiceIsolationActive != 0, s.EchoCancelActive != 0, s.NearbyVoiceRemovalActive != 0, s.SampleRate, s.Block, s.MicSamples, s.SpeakerSamples);
+            s.VoiceIsolationActive != 0 || externalEcho, s.EchoCancelActive != 0 || externalEcho, s.NearbyVoiceRemovalActive != 0, s.SampleRate, s.Block, s.MicSamples, s.SpeakerSamples);
     }
 
     /// <summary>Feeds mono samples (any count) to a lane and returns the processed samples that are ready. Output lags input by one block.</summary>

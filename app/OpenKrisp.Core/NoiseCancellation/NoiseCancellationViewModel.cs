@@ -145,7 +145,9 @@ public sealed class NoiseCancellationViewModel : ObservableObject
                 OnPropertyChanged(nameof(HasIsolationNote));
                 OnPropertyChanged(nameof(VoiceIsolationIndex));
             }
-            _settings.Save(new AppSettings { MyNoiseCancel = _my, OthersNoiseCancel = _others, VoiceIsolation = (int)_isolation });
+            var saved = _settings.Load();
+            saved.MyNoiseCancel = _my; saved.OthersNoiseCancel = _others; saved.VoiceIsolation = (int)_isolation;
+            _settings.Save(saved);
         }
         catch (EngineException e)
         {

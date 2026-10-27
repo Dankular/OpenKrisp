@@ -13,9 +13,9 @@ public sealed class NoteTakerViewModel : ObservableObject, IDisposable
     private ILiveTranscript? _live;
     private readonly IProgress<AudioLevel> _levels;
     private double _peakDb = -60, _rmsDb = -60, _heldPeakDb = -60;
-    private double _speechThresholdPercent = 50, _turnThresholdPercent = 50, _speechProbabilityPercent, _turnProbabilityPercent;
+    private double _speechProbabilityPercent, _turnProbabilityPercent;
     private DateTime _peakUntil, _detectionAt;
-    private bool _speechDetected;
+    private bool _speechDetected, _turnComplete;
     public double PeakDb => _peakDb;
     public double RmsDb => _rmsDb;
     public double HeldPeakDb => _heldPeakDb;
@@ -27,24 +27,10 @@ public sealed class NoteTakerViewModel : ObservableObject, IDisposable
         IsBusy ? Status : "Ready to record → detect speech → transcribe → summarize";
     public double SpeechProbabilityPercent => _speechProbabilityPercent;
     public double TurnProbabilityPercent => _turnProbabilityPercent;
-    public string SpeechThresholdText => $"Speech detection: {_speechProbabilityPercent:F0}% confidence · cutoff {SpeechThresholdPercent:F0}%";
-    public string TurnThresholdText => $"Smart Turn: {_turnProbabilityPercent:F0}% turn-complete confidence · cutoff {TurnThresholdPercent:F0}%";
-    public double SpeechThresholdPercent
-    {
-        get => _speechThresholdPercent;
-        set { if (double.IsFinite(value) && SetField(ref _speechThresholdPercent, Math.Clamp(value, 1, 99))) UpdateDetectionSettings(); }
-    }
-    public double TurnThresholdPercent
-    {
-        get => _turnThresholdPercent;
-        set { if (double.IsFinite(value) && SetField(ref _turnThresholdPercent, Math.Clamp(value, 1, 99))) UpdateDetectionSettings(); }
-    }
-    private void UpdateDetectionSettings()
-    {
-        _worker.SetDetectionThresholds(SpeechThresholdPercent/100, TurnThresholdPercent/100);
-        _live?.SetDetectionThresholds(SpeechThresholdPercent/100, TurnThresholdPercent/100);
-        OnPropertyChanged(nameof(SpeechThresholdText)); OnPropertyChanged(nameof(TurnThresholdText));
-    }
+    public string SpeechConfidenceText => $"Voice activity: {_speechProbabilityPercent:F0}% speech likelihood · automatic";
+    public string TurnConfidenceText => $"Smart Turn: {_turnProbabilityPercent:F0}% turn-complete confidence · automatic";
+    public string TurnDetectionText => !IsRecording ? "Turn detection idle" : _detectionAt == default ? "Listening for a complete thought…" :
+        _speechDetected ? "Speaking · listening" : _turnComplete ? "Thought complete" : "Continuing · waiting for the rest of the thought";
     public void RefreshModelStatus() => Refresh();
     public IReadOnlyList<RecordingInput> Inputs { get; }
     public RecordingInput SelectedInput { get; set; }
@@ -163,9 +149,10 @@ public sealed class NoteTakerViewModel : ObservableObject, IDisposable
                 if (!IsRecording && !IsBusy) return;
                 if (update.Error.Length > 0) { LiveStatus = update.Error; return; }
                 _speechDetected = update.SpeechDetected;
+                _turnComplete = update.TurnComplete;
                 _speechProbabilityPercent = Math.Clamp(update.SpeechProbability*100,0,100);
                 _turnProbabilityPercent = Math.Clamp(update.TurnProbability*100,0,100);
-                foreach (var property in new[] { nameof(SpeechProbabilityPercent), nameof(TurnProbabilityPercent), nameof(SpeechThresholdText), nameof(TurnThresholdText) }) OnPropertyChanged(property);
+                foreach (var property in new[] { nameof(SpeechProbabilityPercent), nameof(TurnProbabilityPercent), nameof(SpeechConfidenceText), nameof(TurnConfidenceText), nameof(TurnDetectionText) }) OnPropertyChanged(property);
                 _detectionAt = DateTime.UtcNow;
                 OnPropertyChanged(nameof(SpeechDetectionText));
                 if (_recording is not null)
@@ -285,7 +272,7 @@ public sealed class NoteTakerViewModel : ObservableObject, IDisposable
 
     private void Refresh()
     {
-        foreach (var property in new[] { nameof(IsRecording), nameof(ModelsReady), nameof(CanSetUp), nameof(CanStart), nameof(CanStop), nameof(CanCancel), nameof(ModelStatus), nameof(ProcessingStep), nameof(SpeechDetectionText) })
+        foreach (var property in new[] { nameof(IsRecording), nameof(ModelsReady), nameof(CanSetUp), nameof(CanStart), nameof(CanStop), nameof(CanCancel), nameof(ModelStatus), nameof(ProcessingStep), nameof(SpeechDetectionText), nameof(TurnDetectionText) })
             OnPropertyChanged(property);
         Rebuild();
     }
@@ -298,7 +285,7 @@ public sealed class NoteTakerViewModel : ObservableObject, IDisposable
         _heldPeakDb = -60;
         _peakUntil = default;
         _speechProbabilityPercent = _turnProbabilityPercent = 0;
-        foreach (var property in new[] { nameof(SpeechProbabilityPercent), nameof(TurnProbabilityPercent), nameof(SpeechThresholdText), nameof(TurnThresholdText) }) OnPropertyChanged(property);
+        foreach (var property in new[] { nameof(SpeechProbabilityPercent), nameof(TurnProbabilityPercent), nameof(SpeechConfidenceText), nameof(TurnConfidenceText), nameof(TurnDetectionText) }) OnPropertyChanged(property);
         UpdateLevel(AudioLevel.Silence);
     }
 
@@ -309,7 +296,7 @@ public sealed class NoteTakerViewModel : ObservableObject, IDisposable
         var now = DateTime.UtcNow;
         if (_peakDb >= _heldPeakDb) { _heldPeakDb = _peakDb; _peakUntil = now.AddSeconds(1); }
         else if (now > _peakUntil) _heldPeakDb = Math.Max(_peakDb, _heldPeakDb - 1.5);
-        foreach (var property in new[] { nameof(PeakDb), nameof(RmsDb), nameof(HeldPeakDb), nameof(LevelText), nameof(SpeechDetectionText) }) OnPropertyChanged(property);
+        foreach (var property in new[] { nameof(PeakDb), nameof(RmsDb), nameof(HeldPeakDb), nameof(LevelText), nameof(SpeechDetectionText), nameof(TurnDetectionText) }) OnPropertyChanged(property);
     }
 
     public void Dispose()

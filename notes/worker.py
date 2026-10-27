@@ -77,7 +77,7 @@ def whistle_decode(config, audio, path=None):
     return model_request("infer",audio)
 
 
-def transcribe(config, audio_path, speakers=0, speech_threshold=.5, turn_threshold=.5):
+def transcribe(config, audio_path, speakers=0):
     progress("Reading audio...")
     audio = decode_audio(audio_path)
     if len(audio) == 0:
@@ -96,12 +96,12 @@ def transcribe(config, audio_path, speakers=0, speech_threshold=.5, turn_thresho
     speech_spans, boundaries = [], []
     for end in range(32000, len(audio)+32000, 32000):
         end=min(end,len(audio)); start=max(0,end-128000)
-        detected=model_request("analyze",audio[start:end],speechThreshold=speech_threshold)
+        detected=model_request("analyze",audio[start:end])
         for span in detected["segments"]:
             left=max((end-32000)/16000,start/16000+span["start"])
             right=start/16000+span["end"]
             if right>left: speech_spans.append((left,right))
-        if detected["segments"] and detected["turnProbability"]>=turn_threshold and not detected.get("speechDetected",False):
+        if detected["segments"] and detected["turnComplete"]:
             boundary=start/16000+detected["segments"][-1]["end"]
             if not boundaries or boundary>boundaries[-1]+.1: boundaries.append(boundary)
     gated=[]
@@ -207,10 +207,10 @@ def live(config, expected_speakers=0):
     def read_packets():
         try:
             while True:
-                header = exact(20)
+                header = exact(12)
                 if header is None:
                     break
-                offset, count, speech_threshold, turn_threshold = struct.unpack("<dIff", header)
+                offset, count = struct.unpack("<dI", header)
                 if count > 16000 * 10:
                     break
                 raw = exact(count * 4)
@@ -220,7 +220,7 @@ def live(config, expected_speakers=0):
                 if packets.full():
                     try: packets.get_nowait()
                     except queue.Empty: pass
-                packets.put((offset, np.frombuffer(raw, dtype="<f4").copy(), speech_threshold, turn_threshold))
+                packets.put((offset, np.frombuffer(raw, dtype="<f4").copy()))
         finally:
             packets.put(None)
     threading.Thread(target=read_packets, daemon=True).start()
@@ -239,7 +239,7 @@ def live(config, expected_speakers=0):
                 if pending:
                     print(json.dumps(dict(turns=compact_words(mark_paragraphs(stable + pending, boundaries)), audioEnd=expected_end, processingSeconds=0, skippedSeconds=skipped)), flush=True)
                 return
-            offset, new_audio, speech_threshold, turn_threshold = packet
+            offset, new_audio = packet
             if offset - expected_end > 0.1:
                 skipped += offset - expected_end
                 tail = np.zeros(0, np.float32)
@@ -247,7 +247,7 @@ def live(config, expected_speakers=0):
             window_start = offset - len(tail) / 16000
             end = offset + len(new_audio) / 16000
             started = time.monotonic()
-            detection = model_request("analyze", window, speechThreshold=speech_threshold)
+            detection = model_request("analyze", window)
             segments = detection["segments"]
             # Embed short speech spans separately: one mixed-voice window must not
             # gradually drag a person's identity centroid toward the next speaker.
@@ -272,13 +272,13 @@ def live(config, expected_speakers=0):
                 committed_end = settled[-1]["end"]
             expected_end = end
             tail = window[-6*16000:]
-            if segments and detection["turnProbability"] >= turn_threshold and not detection.get("speechDetected", False):
+            if segments and detection["turnComplete"]:
                 boundary = window_start + segments[-1]["end"]
                 if not boundaries or boundary > boundaries[-1] + .1: boundaries.append(boundary)
             print(json.dumps(dict(turns=compact_words(mark_paragraphs(stable + pending, boundaries)), audioEnd=end,
                 processingSeconds=time.monotonic()-started, skippedSeconds=skipped,
                 speechDetected=detection.get("speechDetected", False), speechProbability=detection["speechProbability"],
-                turnProbability=detection["turnProbability"], turnBoundaries=boundaries), ensure_ascii=False), flush=True)
+                turnProbability=detection["turnProbability"], turnComplete=detection["turnComplete"], turnBoundaries=boundaries), ensure_ascii=False), flush=True)
     finally:
         scratch.unlink(missing_ok=True)
 
@@ -297,8 +297,6 @@ def main():
     parser.add_argument("--output")
     parser.add_argument("--speakers", type=int, default=0)
     parser.add_argument("--config", default="config.json")
-    parser.add_argument("--speech-threshold", type=float, default=.5)
-    parser.add_argument("--turn-threshold", type=float, default=.5)
     args = parser.parse_args()
     home = Path(args.home).resolve()
     os.environ.update(HF_HOME=str(home / "cache"), HF_HUB_OFFLINE="1", NEEDLE_TELEMETRY="0", DO_NOT_TRACK="1", HF_HUB_DISABLE_TELEMETRY="1")
@@ -309,7 +307,7 @@ def main():
     if not args.input or not args.output:
         parser.error("--input and --output are required")
     if args.command == "transcribe":
-        result = transcribe(config, args.input, args.speakers, args.speech_threshold, args.turn_threshold)
+        result = transcribe(config, args.input, args.speakers)
     else:
         turns = json.loads(Path(args.input).read_text(encoding="utf-8-sig"))
         result = create_title(config, home, turns) if args.command == "title" else summarize(config, home, turns)

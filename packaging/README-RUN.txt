@@ -16,11 +16,11 @@ Features
   - The noise-removal engine loads and the switches are saved.
   - Audio routing (Noise cancellation tab): pick devices and press Start. The microphone can go to a playback device,
     or to the OpenKrisp virtual microphone if you have installed the MicyWMD driver yourself (not included).
-    Use headphones while testing: there is no echo cancellation.
+    My voice uses Windows AEC with a selectable speaker reference and separate virtual-cable output.
 
 What does not work yet
   - Cleaning incoming audio needs a virtual speaker device (apps play into it, OpenKrisp captures and cleans it). None is included.
-  - Voice isolation (Auto: remove nearby voices and echo) is not implemented. The tab says which parts are not active.
+  - Personal voiceprint filtering of unrelated nearby speakers is not implemented.
   - Cloud/team sync and Slack/HubSpot/Salesforce delivery are not connected; use local exports.
   - No virtual microphone driver is included (see tools\ below).
 

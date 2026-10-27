@@ -18,6 +18,28 @@
 
             <!-- The two switches -->
             <Border Style="{StaticResource CardStyle}">
+                <StackPanel Spacing="14">
+                    <TextBlock Text="My voice · virtual microphone" Style="{StaticResource CardTitleStyle}" />
+                    <TextBlock Text="Cancel speaker playback leaking into your microphone, then reduce background noise with DPDFNet." Style="{StaticResource MutedTextStyle}" TextWrapping="Wrap" />
+                    <ComboBox Header="Your microphone" ItemsSource="{x:Bind Voice.Inputs, Mode=OneWay}" DisplayMemberPath="Name" SelectedItem="{x:Bind Voice.Microphone, Mode=TwoWay}" IsEnabled="{x:Bind Voice.CanConfigure, Mode=OneWay}" HorizontalAlignment="Stretch" />
+                    <ComboBox Header="Speakers / echo reference (the playback you hear)" ItemsSource="{x:Bind Voice.Speakers, Mode=OneWay}" DisplayMemberPath="Name" SelectedItem="{x:Bind Voice.SpeakerReference, Mode=TwoWay}" IsEnabled="{x:Bind Voice.CanConfigure, Mode=OneWay}" HorizontalAlignment="Stretch" />
+                    <ComboBox Header="Cleaned voice → virtual-cable playback input" ItemsSource="{x:Bind Voice.Outputs, Mode=OneWay}" DisplayMemberPath="Name" SelectedItem="{x:Bind Voice.VirtualOutput, Mode=TwoWay}" IsEnabled="{x:Bind Voice.CanConfigure, Mode=OneWay}" HorizontalAlignment="Stretch" />
+                    <TextBlock Text="Use a dedicated virtual cable: send cleaned audio to its playback input, then select the matching recording output in Zoom, Teams or Meet. Keep speaker playback on a separate device."
+                               Style="{StaticResource MutedTextStyle}" TextWrapping="Wrap" />
+                    <TextBlock Text="Windows AEC adapts to the selected speaker reference automatically. DPDFNet suppresses background noise. This path has no speaker-enrollment filter for unrelated people talking nearby."
+                               Style="{StaticResource MutedTextStyle}" TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="Start voice microphone" Style="{StaticResource AccentButtonStyle}" Click="StartVoice_Click" IsEnabled="{x:Bind Voice.CanStart, Mode=OneWay}" />
+                        <Button Content="Stop" Click="StopVoice_Click" IsEnabled="{x:Bind Voice.CanStop, Mode=OneWay}" />
+                        <Button Content="Refresh devices" Click="RefreshVoice_Click" IsEnabled="{x:Bind Voice.CanConfigure, Mode=OneWay}" />
+                    </StackPanel>
+                    <ProgressBar IsIndeterminate="{x:Bind Voice.IsBusy, Mode=OneWay}" />
+                    <TextBlock Text="{x:Bind Voice.Status, Mode=OneWay}" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                    <TextBlock Text="{x:Bind Voice.OutputLevel, Mode=OneWay}" Style="{StaticResource MutedTextStyle}" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource CardStyle}">
                 <StackPanel Spacing="20">
                     <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
@@ -53,26 +75,6 @@
 
                     <TextBlock Text="{x:Bind Vm.StatusText, Mode=OneWay}" Style="{StaticResource MutedTextStyle}" />
                     <TextBlock Text="{x:Bind Vm.Error, Mode=OneWay}" Style="{StaticResource ErrorTextStyle}" />
-                </StackPanel>
-            </Border>
-
-            <!-- Voice isolation -->
-            <Border Style="{StaticResource CardStyle}">
-                <StackPanel Spacing="12">
-                    <TextBlock Text="Voice isolation" Style="{StaticResource CardTitleStyle}" />
-                    <TextBlock x:Name="IsolationDescription" Style="{StaticResource MutedTextStyle}" />
-                    <RadioButtons
-                        IsEnabled="{x:Bind Vm.IsAvailable}"
-                        SelectedIndex="{x:Bind Vm.VoiceIsolationIndex, Mode=TwoWay}"
-                        MaxColumns="2">
-                        <x:String>Off</x:String>
-                        <x:String>Auto</x:String>
-                    </RadioButtons>
-                    <InfoBar
-                        Severity="Informational"
-                        Message="{x:Bind Vm.IsolationNote, Mode=OneWay}"
-                        IsOpen="{x:Bind Vm.HasIsolationNote, Mode=OneWay}"
-                        IsClosable="False" />
                 </StackPanel>
             </Border>
 

@@ -11,12 +11,10 @@ public sealed class LocalNotesWorker : ILocalNotesWorker
     private readonly string _home;
     private readonly string _scripts;
     private TractRuntimeService? _runtime;
-    private double _speechThreshold = .5, _turnThreshold = .5;
     public string Home => _home;
     public string Scripts => _scripts;
     public string PythonExecutable => Python;
     public void AttachRuntime(TractRuntimeService runtime) => _runtime = runtime;
-    public void SetDetectionThresholds(double speech, double turn) { _speechThreshold = speech; _turnThreshold = turn; }
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private string Python => Path.Combine(_home, "venv", "Scripts", "python.exe");
     public LocalNotesWorker(string? home = null, string? scripts = null)
@@ -51,7 +49,6 @@ public sealed class LocalNotesWorker : ILocalNotesWorker
     public ILiveTranscript StartLive(IProgress<LiveTranscriptUpdate> preview, int speakers = 0)
     {
         var live = new LiveTranscriptSession(Python, Path.Combine(_scripts, "worker.py"), _home, preview, speakers, start => _runtime?.Configure(start));
-        live.SetDetectionThresholds(_speechThreshold, _turnThreshold);
         return live;
     }
 
@@ -93,9 +90,7 @@ public sealed class LocalNotesWorker : ILocalNotesWorker
         try
         {
             await RunAsync(Python, [Path.Combine(_scripts, "worker.py"), command, "--home", _home,
-                "--input", input, "--output", output, "--speakers", speakers.ToString(),
-                "--speech-threshold", _speechThreshold.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                "--turn-threshold", _turnThreshold.ToString(System.Globalization.CultureInfo.InvariantCulture)], progress, ct, useModels: command == "transcribe");
+                "--input", input, "--output", output, "--speakers", speakers.ToString()], progress, ct, useModels: command == "transcribe");
             var result = JsonSerializer.Deserialize<T>(await File.ReadAllTextAsync(output, ct), Json);
             return result ?? throw new InvalidOperationException("The local model returned no result.");
         }

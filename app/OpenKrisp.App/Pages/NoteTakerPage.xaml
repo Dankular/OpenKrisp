@@ -68,22 +68,17 @@
                                 <TextBlock Grid.Column="2" Text="0 · clip" HorizontalAlignment="Right" FontSize="11" />
                             </Grid>
                             <TextBlock Text="{x:Bind NotesVm.LevelText, Mode=OneWay}" Style="{StaticResource MutedTextStyle}" />
-                            <TextBlock Text="{x:Bind NotesVm.SpeechThresholdText, Mode=OneWay}" />
+                            <TextBlock Text="{x:Bind NotesVm.SpeechConfidenceText, Mode=OneWay}" />
                             <Grid x:Name="SpeechConfidenceTrack" Height="14" SizeChanged="LevelTrack_SizeChanged">
                                 <ProgressBar Minimum="0" Maximum="100" Value="{x:Bind NotesVm.SpeechProbabilityPercent, Mode=OneWay}" VerticalAlignment="Center" />
-                                <Border x:Name="SpeechCutoffMarker" Width="3" Background="#38BDF8" HorizontalAlignment="Left" />
                             </Grid>
-                            <Slider Minimum="1" Maximum="99" StepFrequency="1" Value="{x:Bind NotesVm.SpeechThresholdPercent, Mode=TwoWay}"
-                                    AutomationProperties.Name="Speech detection confidence threshold" />
                             <TextBlock Text="{x:Bind NotesVm.SpeechDetectionText, Mode=OneWay}" TextWrapping="Wrap" />
-                            <TextBlock Text="{x:Bind NotesVm.TurnThresholdText, Mode=OneWay}" />
+                            <TextBlock Text="{x:Bind NotesVm.TurnConfidenceText, Mode=OneWay}" />
+                            <TextBlock Text="{x:Bind NotesVm.TurnDetectionText, Mode=OneWay}" FontWeight="SemiBold" />
                             <Grid x:Name="TurnConfidenceTrack" Height="14" SizeChanged="LevelTrack_SizeChanged">
                                 <ProgressBar Minimum="0" Maximum="100" Value="{x:Bind NotesVm.TurnProbabilityPercent, Mode=OneWay}" VerticalAlignment="Center" />
-                                <Border x:Name="TurnCutoffMarker" Width="3" Background="#38BDF8" HorizontalAlignment="Left" />
                             </Grid>
-                            <Slider Minimum="1" Maximum="99" StepFrequency="1" Value="{x:Bind NotesVm.TurnThresholdPercent, Mode=TwoWay}"
-                                    AutomationProperties.Name="Smart Turn completion threshold" />
-                            <TextBlock Text="Blue markers show the actual model cutoffs. Speech detection filters transcription; Smart Turn determines when a thought is complete. The original recording is preserved."
+                            <TextBlock Text="Voice activity and thought completion follow the models automatically. Confidence updates from incoming audio; no sensitivity settings are required. The original recording is preserved."
                                        Style="{StaticResource MutedTextStyle}" TextWrapping="Wrap" />
                         </StackPanel>
                     </Border>

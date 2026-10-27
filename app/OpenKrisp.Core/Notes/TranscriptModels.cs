@@ -15,6 +15,7 @@ public sealed record LiveTranscriptUpdate(IReadOnlyList<TranscriptTurn> Turns, d
     public bool SpeechDetected { get; init; }
     public double SpeechProbability { get; init; }
     public double TurnProbability { get; init; }
+    public bool TurnComplete { get; init; }
     public IReadOnlyList<double> TurnBoundaries { get; init; } = Array.Empty<double>();
 }
 
@@ -31,7 +32,6 @@ public interface ILiveTranscript : IDisposable
 {
     void AddSamples(float[] samples);
     Task CompleteAsync();
-    void SetDetectionThresholds(double speech, double turn) { }
 }
 
 public interface ILocalNotesWorker
@@ -39,7 +39,6 @@ public interface ILocalNotesWorker
     bool IsReady { get; }
     bool IsPreparing => false;
     string RuntimeStatus => "";
-    void SetDetectionThresholds(double speech, double turn) { }
     ILiveTranscript? StartLive(IProgress<LiveTranscriptUpdate> preview, int speakers = 0) => null;
     Task<string> CreateTitleAsync(IReadOnlyList<TranscriptTurn> transcript, IProgress<string> progress, CancellationToken ct) => Task.FromResult("");
     Task InstallAsync(IProgress<string> progress, CancellationToken ct);

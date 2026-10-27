@@ -47,15 +47,16 @@ def load():
             raise
 
 
-def analyze(audio, threshold):
+def analyze(audio):
     size=min(len(audio),160000)
-    if size==0: return {'segments':[],'speechProbability':0,'turnProbability':0}
+    if size==0: return {'segments':[],'speechProbability':0,'speechDetected':False,'turnProbability':0,'turnComplete':False}
     x=np.zeros((1,1,160000),np.float32); x[0,0,:size]=audio[-size:]
     scores=models['speech'].run([x])[0].to_numpy()[0]
     centers=(np.arange(len(scores))*270+991/2)/16000
     valid=centers<=size/16000
     probabilities=np.clip(1-np.exp(scores[:,0]),0,1)
-    active=(probabilities>=threshold)&valid
+    # Native pyannote powerset classification: class zero is the empty/silent set.
+    active=(np.argmax(scores,axis=-1)!=0)&valid
     segments=[]
     for i in np.flatnonzero(active):
         start=max(0,(i*270)/16000)
@@ -65,7 +66,10 @@ def analyze(audio, threshold):
     segments=[s for s in segments if s['end']-s['start']>=.3]
     recent=valid&(centers>=max(0,size/16000-.25))
     confidence=float(np.max(probabilities[recent])) if recent.any() else 0
-    return {'segments':segments,'speechProbability':confidence,'speechDetected':confidence>=threshold,'turnProbability':models['turn'].probability(audio)}
+    speech_detected=bool(np.any(active&recent))
+    turn=models['turn'].predict(audio)
+    return {'segments':segments,'speechProbability':confidence,'speechDetected':speech_detected,
+            'turnProbability':turn['probability'],'turnComplete':turn['complete'] and not speech_detected}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -86,7 +90,7 @@ class Handler(BaseHTTPRequestHandler):
                 elif self.path in ('/infer','/analyze'):
                     if status['state']!='loaded': raise RuntimeError('Load ASR models in Status before recording')
                     audio=np.frombuffer(base64.b64decode(data['audio'],validate=True),'<f4').copy()
-                    result=models['asr'].transcribe(audio) if self.path=='/infer' else analyze(audio,float(data.get('speechThreshold',.5)))
+                    result=models['asr'].transcribe(audio) if self.path=='/infer' else analyze(audio)
                 else: raise ValueError('Unknown model command')
             payload=json.dumps(result).encode()
             self.send_response(200)
