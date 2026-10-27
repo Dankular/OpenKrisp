@@ -65,6 +65,7 @@ mic or call audio (48 kHz)
 | `crates/tenvad` | Safe Rust wrapper over the TEN VAD C library |
 | `crates/resample` | 48 to 16 kHz decimator for feeding the VAD |
 | `crates/agc` | Gain control and limiter |
+| `crates/virtualmic` | Sender for the MicyWMD virtual microphone driver (Windows; compile-checked only) |
 | `crates/voiceclean` | Command-line tool and demo |
 | `tools/` | Python scripts used to check results against reference implementations |
 
@@ -75,6 +76,8 @@ Early. On six noisy test clips the enhancer lifts SI-SDR from 0.5 to 13.7 dB and
 [docs/measurements.md](docs/measurements.md). Open questions are listed there too, including how to drive the gain stage from TEN VAD's probabilities.
 
 Also built but not yet proven on hardware: a soft gate with lookahead, a full pipeline, and a live-audio worker with a cpal device layer (compile-checked only, never run on a real device).
+
+Virtual microphone: the chosen driver is MicyWMD; the reasoning and the Windows test plan are in [docs/virtual-mic.md](docs/virtual-mic.md).
 
 Planned next: diagnosing the gain stage, trying live audio on Windows, a virtual microphone, the Windows control app, and a local notes and action-items feature.
 
