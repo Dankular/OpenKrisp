@@ -1,6 +1,6 @@
 # OpenKrisp for Windows
 
-Local meeting and lecture recording, Whistle transcription, speaker labels, searchable notes, summaries and action items in a WinUI 3 workspace.
+Local meeting and lecture recording, Parakeet Ultra transcription, speaker labels, searchable notes, summaries and action items in a WinUI 3 workspace.
 
 ## Workspace
 
@@ -11,13 +11,13 @@ Local meeting and lecture recording, Whistle transcription, speaker labels, sear
 
 ## Local models
 
-Whistle remains the ASR model in English, German, French, Spanish, Italian, Dutch and Polish. The app uses an [ONNX export of the same Whistle weights](https://huggingface.co/mrfakename/whistle-ONNX), pinned to revision `14fc92cb09ad5c271fe9a4ec4be70274790050d2`, on **Sonos Tract CUDA**. There is no silent CPU ASR fallback. Tract 0.23.9 handles Gather/index operations on CPU to avoid its empty initial KV-cache CUDA Gather limitation; the ASR neural network executes on CUDA.
+[Parakeet Ultra](https://huggingface.co/moondream/parakeet-ultra) is the ASR model, supporting 25 European languages including English, German, French, Spanish, Italian, Dutch and Polish. The [FP16 GGUF conversion](https://huggingface.co/handy-computer/parakeet-ultra-gguf), pinned to `a1539be1b849ea7463b88343e5277b373d0c4ea9`, runs on **native transcribe.cpp CUDA v0.4.1**. The runtime selects an exact CUDA device and refuses CPU fallback. No PyTorch, TensorFlow or standalone ONNX Runtime is required. The model is 1.26 GB, plus the native CUDA runtime. Native TDT word timestamps feed the existing speaker-label pipeline. Live preview uses overlapping short windows; final transcription uses overlapping 20-second windows. Ultra is a non-streaming model used for windowed live preview. Smart Turn remains on Tract CUDA. Tract cannot directly load Ultra's variable-length strided-slice ONNX export, so the ASR path uses the dedicated native runtime.
 
-[Smart Turn v3 ONNX](https://huggingface.co/onnx-community/smart-turn-v3-ONNX), revision `dbd03130e87854011fa8c2f203077f2cbfc3adad`, runs on Tract CUDA and predicts semantic end-of-turn probability from audio. Its Whisper-derived encoder is used only for turn classification; it does not transcribe audio or replace Whistle. Model turn endings and speaker changes determine paragraph boundaries. Fixed character-count and pause-based paragraph splitting are removed.
+[Smart Turn v3 ONNX](https://huggingface.co/onnx-community/smart-turn-v3-ONNX), revision `dbd03130e87854011fa8c2f203077f2cbfc3adad`, runs on Tract CUDA and predicts semantic end-of-turn probability from audio. Its Whisper-derived encoder is used only for turn classification; it does not transcribe audio or replace Parakeet Ultra. Model turn endings and speaker changes determine paragraph boundaries. Fixed character-count and pause-based paragraph splitting are removed.
 
 Speech segmentation uses the existing pyannote model on Tract CPU. Voice activity follows the model’s native powerset classification automatically. Smart Turn uses its trained binary classification to mark completed thoughts. Both confidence displays update from incoming audio and are read-only; there are no manual sensitivity thresholds. Raw recording peaks/RMS remain visible on a green-to-red meter. Speaker embeddings and final clustering use sherpa-onnx with NeMo TitaNet; the expected speaker count defaults to two (zero selects automatic clustering).
 
-Titles use [Supra Title 50M](https://huggingface.co/SupraLabs/supra-title-50m-pre) Q8 weights and a minimal CPU completion runtime. Detailed notes use **[Qwen2.5-7B-Instruct-1M](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-1M)** in Q4_K_M GGUF form, pinned to revision `381ac2097f05bff2f77e7e3864239c11e521c3d3` of [bartowski's conversion](https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-1M-GGUF). The native llama.cpp CUDA runtime loads it only while summarizing, fits GPU offload to available memory, and releases it when the operation ends. No PyTorch or TensorFlow is installed. BART and its standalone ONNX Runtime/tokenizer dependencies are removed from the notes pipeline.
+Titles use [Supra Title 50M](https://huggingface.co/SupraLabs/supra-title-50m-pre) Q8 weights and a minimal CPU completion runtime. Detailed notes use **[Qwen2.5-7B-Instruct-1M](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-1M)** in Q4_K_M GGUF form, pinned to revision `381ac2097f05bff2f77e7e3864239c11e521c3d3` of [bartowski's conversion](https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-1M-GGUF). The native llama.cpp CUDA runtime loads it only while summarizing, fits GPU offload to available memory, and releases it when the operation ends. The app stops the ASR/Smart Turn host before Qwen notes generation to free GPU memory, then restores it after generation or cancellation; recording and summarization cannot run concurrently. No PyTorch or TensorFlow is installed. BART and its standalone ONNX Runtime/tokenizer dependencies are removed from the notes pipeline.
 
 The model is the **1M-context checkpoint**, but this 8 GB GPU configuration uses a **16,384-token working context**, quantized KV cache and hierarchical section processing. It does not allocate or claim a million-token context. Every source section is read; detailed topic notes and grounded tasks are retained from all sections, while their overviews are consolidated. Qwen's published full-1M deployment requires substantially more VRAM than this machine.
 
@@ -29,7 +29,7 @@ Summaries run only on click. Model notes are estimates, and speaker identities/t
 
 ## Setup and privacy
 
-Python 3.12+ and a compatible NVIDIA CUDA 13 installation/driver are required for this CUDA build. Status reports missing runtime libraries or model errors. Model weights/runtime downloads are roughly 5 GB once, plus Python dependencies. Qwen Q4_K_M weights are 4.68 GB; installed CUDA libraries are reused where available. To prepare manually:
+Python 3.12+ and a compatible NVIDIA CUDA 13 installation/driver are required for this CUDA build. Status reports missing runtime libraries or model errors. Model weights/runtime downloads are roughly 6.5 GB once, plus Python dependencies. Qwen Q4_K_M weights are 4.68 GB; installed CUDA libraries are reused where available. To prepare manually:
 
 ```powershell
 python notes/bootstrap.py --home .notes-runtime

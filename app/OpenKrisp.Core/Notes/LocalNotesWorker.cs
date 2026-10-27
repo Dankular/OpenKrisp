@@ -38,7 +38,8 @@ public sealed class LocalNotesWorker : ILocalNotesWorker
                 var root = config.RootElement;
                 return root.TryGetProperty("notesBackend", out var backend) && backend.GetString() == "qwen2.5-1m"
                     && File.Exists(root.GetProperty("titleModel").GetString()) && File.Exists(root.GetProperty("titleCli").GetString())
-                    && root.TryGetProperty("whistleOnnxDirectory", out var asr) && File.Exists(Path.Combine(asr.GetString()!, "onnx", "decoder.onnx.data"))
+                    && root.TryGetProperty("asrModel", out var asrModel) && asrModel.GetString() == "parakeet-ultra"
+                    && root.TryGetProperty("parakeetUltraModel", out var asr) && File.Exists(asr.GetString())
                     && root.TryGetProperty("smartTurnDirectory", out var turn) && File.Exists(Path.Combine(turn.GetString()!, "onnx", "model.onnx"))
                     && File.Exists(root.GetProperty("notesModel").GetString()) && File.Exists(root.GetProperty("notesServer").GetString());
             }
@@ -57,7 +58,7 @@ public sealed class LocalNotesWorker : ILocalNotesWorker
     {
         await RunAsync(Environment.GetEnvironmentVariable("OPENKRISP_SETUP_PYTHON") ?? "python",
             new[] { Path.Combine(_scripts, "bootstrap.py"), "--home", _home }.Concat(redownloadAsr ? new[] { "--redownload-asr" } : Array.Empty<string>()).ToArray(), progress, ct);
-        if (!IsReady) throw new InvalidOperationException("Local model setup did not finish.");
+        if (!ModelsInstalled) throw new InvalidOperationException("Local model setup did not finish.");
     }
 
     public async Task<IReadOnlyList<TranscriptTurn>> TranscribeAsync(string audioPath, int speakers, IProgress<string> progress, CancellationToken ct)
@@ -69,7 +70,8 @@ public sealed class LocalNotesWorker : ILocalNotesWorker
     private sealed record TranscriptTitle(string Title);
 
     public Task<MeetingSummary> SummarizeAsync(IReadOnlyList<TranscriptTurn> transcript, IProgress<string> progress, CancellationToken ct)
-        => GenerateAsync<MeetingSummary>("summarize", transcript, progress, ct);
+        => _runtime is null ? GenerateAsync<MeetingSummary>("summarize", transcript, progress, ct)
+            : _runtime.WithModelsReleasedAsync(() => GenerateAsync<MeetingSummary>("summarize", transcript, progress, ct), progress);
 
     private async Task<T> GenerateAsync<T>(string command, IReadOnlyList<TranscriptTurn> transcript, IProgress<string> progress, CancellationToken ct)
     {
@@ -85,7 +87,7 @@ public sealed class LocalNotesWorker : ILocalNotesWorker
 
     private async Task<T> ExecuteAsync<T>(string command, string input, int speakers, IProgress<string> progress, CancellationToken ct)
     {
-        if (!IsReady) throw new InvalidOperationException("Set up local models first.");
+        if (!ModelsInstalled || (command == "transcribe" && !IsReady)) throw new InvalidOperationException("Set up and load local models first.");
         var output = Path.Combine(_home, Guid.NewGuid() + ".result.json");
         try
         {

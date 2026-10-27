@@ -12,7 +12,7 @@ import numpy as np
 
 lock=threading.RLock()
 models={}
-status={'state':'starting','backend':'Tract CUDA','message':'Starting local model host'}
+status={'state':'starting','backend':'Native CUDA + Tract CUDA','message':'Starting local model host'}
 token=secrets.token_urlsafe(32)
 
 
@@ -28,20 +28,21 @@ def emit(**values):
 
 
 def load():
-    from whistle_tract import WhistleTract
+    from parakeet_ultra import ParakeetUltra
     from smart_turn import SmartTurn
     import tract
     with lock:
         if models: return
         try:
-            emit(state='loading',message='Loading Whistle on GPU')
-            models['asr']=WhistleTract(config['whistleOnnxDirectory'],lambda message: emit(message=message))
+            emit(state='loading',message='Loading Parakeet Ultra on GPU')
+            models['asr']=ParakeetUltra(config['parakeetUltraModel'],lambda message: emit(message=message))
             emit(message='Loading Smart Turn on GPU')
             models['turn']=SmartTurn(config['smartTurnDirectory'])
             emit(message='Loading speech segmentation')
             models['speech']=tract.onnx().load(config['segmentation']).into_model().into_runnable()
-            emit(state='loaded',message='Whistle ASR + Smart Turn on CUDA; speech segmentation on Tract CPU')
+            emit(state='loaded',message='Parakeet Ultra ASR on native CUDA; Smart Turn on Tract CUDA; speech segmentation on Tract CPU')
         except Exception as error:
+            if 'asr' in models: models['asr'].close()
             models.clear(); gc.collect()
             emit(state='error',message=str(error))
             raise
@@ -84,7 +85,7 @@ class Handler(BaseHTTPRequestHandler):
             with lock:
                 if self.path=='/load': load(); result=dict(status)
                 elif self.path=='/unload':
-                    if 'asr' in models: models['asr'].row.cache_clear()
+                    if 'asr' in models: models['asr'].close()
                     models.clear(); gc.collect(); emit(state='unloaded',message='Models unloaded'); result=dict(status)
                 elif self.path=='/status': result=dict(status)
                 elif self.path in ('/infer','/analyze'):

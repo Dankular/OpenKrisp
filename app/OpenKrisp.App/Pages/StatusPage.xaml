@@ -6,18 +6,18 @@
             <TextBlock Text="Status" Style="{StaticResource PageTitleStyle}" />
             <Border Style="{StaticResource CardStyle}">
                 <StackPanel Spacing="14">
-                    <TextBlock Text="Tract runtime and ASR models" Style="{StaticResource CardTitleStyle}" />
+                    <TextBlock Text="GPU runtimes and ASR models" Style="{StaticResource CardTitleStyle}" />
                     <TextBlock Text="{x:Bind Runtime.State, Mode=OneWay}" FontSize="22" FontWeight="SemiBold" />
                     <TextBlock Text="{x:Bind Runtime.Message, Mode=OneWay}" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
                     <ProgressBar IsIndeterminate="{x:Bind Runtime.IsBusy, Mode=OneWay}" />
                     <TextBlock Text="{x:Bind Runtime.Backend}" TextWrapping="Wrap" />
                     <TextBlock Text="{x:Bind Runtime.NotesBackend}" TextWrapping="Wrap" />
-                    <TextBlock Text="Whistle’s seven languages are preserved. Smart Turn detects completed thoughts from audio; it does not replace Whistle transcription." TextWrapping="Wrap" />
+                    <TextBlock Text="Parakeet Ultra supports 25 European languages, including the original seven. Smart Turn detects completed thoughts; speaker identification remains separate." TextWrapping="Wrap" />
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <Button Content="Load models" Click="Load_Click" IsEnabled="{x:Bind Runtime.CanManage, Mode=OneWay}" />
                         <Button Content="Unload models" Click="Unload_Click" IsEnabled="{x:Bind Runtime.CanManage, Mode=OneWay}" />
                         <Button Content="Redownload ASR" Click="Redownload_Click" IsEnabled="{x:Bind Runtime.CanManage, Mode=OneWay}" />
-                        <Button Content="Restart Tract" Click="Restart_Click" IsEnabled="{x:Bind Runtime.CanManage, Mode=OneWay}" />
+                        <Button Content="Restart model runtimes" Click="Restart_Click" IsEnabled="{x:Bind Runtime.CanManage, Mode=OneWay}" />
                     </StackPanel>
                     <TextBlock Text="Models download and load automatically at startup. Model controls are disabled while recording or processing." Style="{StaticResource MutedTextStyle}" TextWrapping="Wrap" />
                     <TextBlock Text="{x:Bind Runtime.DownloadStatus, Mode=OneWay}" TextWrapping="Wrap" IsTextSelectionEnabled="True" />

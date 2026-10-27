@@ -15,7 +15,9 @@ TITLE_FILE = "SupraTitle-50M-Q8_0.gguf"
 NOTES_REPO = "bartowski/Qwen2.5-7B-Instruct-1M-GGUF"
 NOTES_REVISION = "381ac2097f05bff2f77e7e3864239c11e521c3d3"
 NOTES_FILE = "Qwen2.5-7B-Instruct-1M-Q4_K_M.gguf"
-WHISTLE_ONNX_REVISION = "14fc92cb09ad5c271fe9a4ec4be70274790050d2"
+ULTRA_REPO = "handy-computer/parakeet-ultra-gguf"
+ULTRA_REVISION = "a1539be1b849ea7463b88343e5277b373d0c4ea9"
+ULTRA_FILE = "parakeet-ultra-F16.gguf"
 TURN_REVISION = "dbd03130e87854011fa8c2f203077f2cbfc3adad"
 
 
@@ -64,16 +66,17 @@ def main():
         if not python.exists():
             subprocess.run([sys.executable, "-m", "venv", str(home / "venv")], check=True)
         subprocess.run([str(python), "-m", "pip", "install", "-r", str(Path(__file__).with_name("requirements.txt"))], check=True)
+        subprocess.run([str(python), "-m", "pip", "install", "--no-deps", "--timeout", "120", "-r", str(Path(__file__).with_name("asr-requirements.txt"))], check=True)
         subprocess.run([str(python), str(Path(__file__).resolve()), "--home", str(home)] + (["--prepare-only"] if args.prepare_only else []) + (["--redownload-asr"] if args.redownload_asr else []), check=True)
         return
     os.environ.update(HF_HOME=str(home / "cache"), NEEDLE_TELEMETRY="0", DO_NOT_TRACK="1", HF_HUB_DISABLE_TELEMETRY="1")
     from huggingface_hub import hf_hub_download
     model_dir = home / "models"
     model_dir.mkdir(exist_ok=True)
-    asr_dir = model_dir / "whistle-onnx"
-    for filename in ["whistle.pack", "onnx/encoder.onnx", "onnx/encoder.onnx.data", "onnx/decoder.onnx", "onnx/decoder.onnx.data"]:
-        print("Downloading Whistle GPU model: " + filename, flush=True)
-        hf_hub_download("mrfakename/whistle-ONNX", filename, revision=WHISTLE_ONNX_REVISION, local_dir=asr_dir, force_download=args.redownload_asr)
+    asr_dir = model_dir / "parakeet-ultra"
+    for filename in [ULTRA_FILE, "LICENSE", "NOTICE"]:
+        print("Downloading Parakeet Ultra GPU model: " + filename, flush=True)
+        hf_hub_download(ULTRA_REPO, filename, revision=ULTRA_REVISION, local_dir=asr_dir, force_download=args.redownload_asr)
     turn_dir = model_dir / "smart-turn"
     for filename in ["config.json", "preprocessor_config.json", "onnx/model.onnx"]:
         print("Downloading Smart Turn: " + filename, flush=True)
@@ -111,8 +114,8 @@ def main():
                 if name in required or (name.startswith("ggml-cpu-") and name.endswith(".dll")) or name.startswith("LICENSE"):
                     (binary_dir / name).write_bytes(archive.read(member))
         archive_path.unlink()
-    config = {"notesBackend": "qwen2.5-1m", "asrBackend": "tract-cuda", "python": str(python),
-              "whistleOnnxDirectory": str(asr_dir), "smartTurnDirectory": str(turn_dir),
+    config = {"notesBackend": "qwen2.5-1m", "asrBackend": "native-cuda", "asrModel": "parakeet-ultra", "python": str(python),
+              "parakeetUltraModel": str(asr_dir/ULTRA_FILE), "smartTurnDirectory": str(turn_dir),
               "segmentation": str(model_dir / "segmentation.onnx"), "embedding": str(model_dir / "embedding.onnx"),
               "titleModel": str(title_model), "titleCli": str(binary_dir / "llama-completion.exe"),
               "notesModel":str(notes_model),"notesServer":str(notes_server),"notesContext":16384}

@@ -9,7 +9,7 @@ import numpy as np
 
 class SmartTurn:
     def __init__(self, directory):
-        from whistle_tract import cuda_environment
+        from cuda_runtime import cuda_environment
         cuda_environment()
         import tract
         model=tract.onnx().load(str(Path(directory)/'onnx/model.onnx')).into_model()

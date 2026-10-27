@@ -92,7 +92,7 @@ public sealed class NoteTakerViewModel : ObservableObject, IDisposable
     public bool CanStart => !IsBusy && !IsRecording && ModelsReady && !_worker.IsPreparing;
     public bool CanStop => IsRecording && !IsBusy;
     public bool CanCancel => IsBusy;
-    public string ModelStatus => ModelsReady ? "Whistle ASR + Smart Turn on Tract CUDA · Supra titles · detailed Qwen2.5-7B-Instruct-1M notes" :
+    public string ModelStatus => ModelsReady ? "Parakeet Ultra ASR on CUDA · Smart Turn on Tract CUDA · Supra titles · detailed Qwen2.5-7B-Instruct-1M notes" :
         _worker.RuntimeStatus.Length > 0 ? _worker.RuntimeStatus : "Preparing local models. Open Status for download and model controls.";
     public string Status { get => _status; private set { if (SetField(ref _status, value)) OnPropertyChanged(nameof(ProcessingStep)); } }
     public string Error { get => _error; private set => SetField(ref _error, value); }

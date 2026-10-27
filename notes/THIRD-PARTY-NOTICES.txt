@@ -1,11 +1,16 @@
-Whistle host pipeline
----------------------
-notes/whistle_tract.py adapts the host frontend, engram lookup and DTW word
-timestamp algorithms from mrfakename/whistle-ONNX, revision
-14fc92cb09ad5c271fe9a4ec4be70274790050d2, licensed under Apache-2.0.
-Source: https://huggingface.co/mrfakename/whistle-ONNX
-License: https://www.apache.org/licenses/LICENSE-2.0
-The ASR model is Cactus Compute Whistle, not a Whisper transcription model.
+Parakeet Ultra
+--------------
+ASR weights: https://huggingface.co/moondream/parakeet-ultra
+Base model: https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
+FP16 GGUF conversion: https://huggingface.co/handy-computer/parakeet-ultra-gguf
+Pinned conversion revision: a1539be1b849ea7463b88343e5277b373d0c4ea9
+Weights license: Creative Commons Attribution 4.0 (CC-BY-4.0).
+https://creativecommons.org/licenses/by/4.0/
+Native ASR runtime/bindings: https://github.com/handy-computer/transcribe.cpp
+Version: v0.4.1; native CUDA 12 provider, no PyTorch dependency.
+Runtime/bindings license: MIT; bundled third-party code retains upstream licenses.
+The GGUF retains upstream weights at FP16 precision. The runtime implements
+the model frontend, TDT decoder and word timing; the host selects CUDA explicitly.
 
 Smart Turn
 ----------

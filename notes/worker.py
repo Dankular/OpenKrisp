@@ -1,4 +1,4 @@
-"""Offline Whistle transcription, ONNX diarization, Supra titles, and Qwen notes."""
+"""Offline Parakeet Ultra transcription, ONNX diarization, Supra titles, and Qwen notes."""
 import argparse
 import gc
 import json
@@ -64,7 +64,7 @@ def model_request(command, audio, **options):
     url=os.environ.get("OPENKRISP_ASR_URL")
     token=os.environ.get("OPENKRISP_ASR_TOKEN")
     if not url or not token:
-        raise RuntimeError("Tract CUDA model host is not loaded. Open Status and load ASR models.")
+        raise RuntimeError("GPU model host is not loaded. Open Status and load ASR models.")
     payload=dict(audio=base64.b64encode(np.asarray(audio,dtype="<f4").tobytes()).decode("ascii"), **options)
     request=urllib.request.Request(url+"/"+command, data=json.dumps(payload).encode(), headers={"Content-Type":"application/json","Authorization":"Bearer "+token})
     with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(request,timeout=180) as response:
@@ -73,7 +73,7 @@ def model_request(command, audio, **options):
     return result
 
 
-def whistle_decode(config, audio, path=None):
+def decode_asr(audio):
     return model_request("infer",audio)
 
 
@@ -111,28 +111,24 @@ def transcribe(config, audio_path, speakers=0):
             if end>start: gated.append(dict(start=start,end=end,speaker=turn["speaker"]))
     turns=gated
     transcript = []
-    scratch = Path(config["whistleOnnxDirectory"]).parent / f"decode-{os.getpid()}.wav"
-    try:
-        committed_end=-1.0
-        for end in list(range(96000,len(audio),64000))+[len(audio)]:
-            end=min(end,len(audio)); at=max(0,end-96000)
-            progress(f"Transcribing with Whistle on Tract CUDA: {end / len(audio):.0%}")
-            if not any(t["end"]>at/16000 and t["start"]<end/16000 for t in turns):
-                if end==len(audio): break
-                continue
-            data=whistle_decode(config,audio[at:end],scratch)
-            words=label_words(data.get("words",[]),turns,at/16000,group=False)
-            fresh=[w for w in words if w["end"]>committed_end+.04 and w["start"]>=committed_end-.08]
-            settled=[w for w in fresh if end==len(audio) or w["end"]<=end/16000-1]
-            transcript.extend(settled)
-            if settled: committed_end=settled[-1]["end"]
+    committed_end=-1.0
+    for end in list(range(320000,len(audio),288000))+[len(audio)]:
+        end=min(end,len(audio)); at=max(0,end-320000)
+        progress(f"Transcribing with Parakeet Ultra on native CUDA: {end / len(audio):.0%}")
+        if not any(t["end"]>at/16000 and t["start"]<end/16000 for t in turns):
             if end==len(audio): break
-        return compact_words(mark_paragraphs(transcript,boundaries))
-    finally:
-        scratch.unlink(missing_ok=True)
+            continue
+        data=decode_asr(audio[at:end])
+        words=label_words(data.get("words",[]),turns,at/16000,group=False)
+        fresh=[w for w in words if w["end"]>committed_end+.04 and w["start"]>=committed_end-.08]
+        settled=[w for w in fresh if end==len(audio) or w["end"]<=end/16000-1]
+        transcript.extend(settled)
+        if settled: committed_end=settled[-1]["end"]
+        if end==len(audio): break
+    return compact_words(mark_paragraphs(transcript,boundaries))
 
 
-# No instruction LLM: each note task has a small dedicated component.
+# Titles remain independent of the detailed notes model.
 from note_models import chunk_lines
 
 
@@ -231,56 +227,52 @@ def live(config, expected_speakers=0):
     boundaries = []
     committed_end = -1.0
     skipped = 0.0
-    scratch = Path(config["whistleOnnxDirectory"]).parent / f"live-{os.getpid()}.wav"
-    try:
-        while True:
-            packet = packets.get()
-            if packet is None:
-                if pending:
-                    print(json.dumps(dict(turns=compact_words(mark_paragraphs(stable + pending, boundaries)), audioEnd=expected_end, processingSeconds=0, skippedSeconds=skipped)), flush=True)
-                return
-            offset, new_audio = packet
-            if offset - expected_end > 0.1:
-                skipped += offset - expected_end
-                tail = np.zeros(0, np.float32)
-            window = np.concatenate([tail, new_audio])
-            window_start = offset - len(tail) / 16000
-            end = offset + len(new_audio) / 16000
-            started = time.monotonic()
-            detection = model_request("analyze", window)
-            segments = detection["segments"]
-            # Embed short speech spans separately: one mixed-voice window must not
-            # gradually drag a person's identity centroid toward the next speaker.
-            turns = []
-            for segment in segments:
-                first, last = max(0,int(segment["start"]*16000)), min(len(window),int(segment["end"]*16000))
-                length = last - first
-                count = max(1, length // 32000)
-                for indices in np.array_split(np.arange(first,last), count):
-                    if len(indices) == 0:
-                        continue
-                    first_sample, last_sample = int(indices[0]), int(indices[-1])+1
-                    label = identities.identify(window[first_sample:last_sample], set())
-                    turns.append(dict(start=window_start+first_sample/16000,end=window_start+last_sample/16000,speaker=label))
-            data = whistle_decode(config, window, scratch) if turns else {"words": []}
-            words = label_words(data.get("words", []), turns, window_start, group=False)
-            fresh = [w for w in words if w["end"] > committed_end + 0.04 and w["start"] >= committed_end - 0.08]
-            pending = [w for w in fresh if w["end"] > end - 1.0]
-            settled = [w for w in fresh if w["end"] <= end - 1.0]
-            stable.extend(settled)
-            if settled:
-                committed_end = settled[-1]["end"]
-            expected_end = end
-            tail = window[-6*16000:]
-            if segments and detection["turnComplete"]:
-                boundary = window_start + segments[-1]["end"]
-                if not boundaries or boundary > boundaries[-1] + .1: boundaries.append(boundary)
-            print(json.dumps(dict(turns=compact_words(mark_paragraphs(stable + pending, boundaries)), audioEnd=end,
-                processingSeconds=time.monotonic()-started, skippedSeconds=skipped,
-                speechDetected=detection.get("speechDetected", False), speechProbability=detection["speechProbability"],
-                turnProbability=detection["turnProbability"], turnComplete=detection["turnComplete"], turnBoundaries=boundaries), ensure_ascii=False), flush=True)
-    finally:
-        scratch.unlink(missing_ok=True)
+    while True:
+        packet = packets.get()
+        if packet is None:
+            if pending:
+                print(json.dumps(dict(turns=compact_words(mark_paragraphs(stable + pending, boundaries)), audioEnd=expected_end, processingSeconds=0, skippedSeconds=skipped)), flush=True)
+            return
+        offset, new_audio = packet
+        if offset - expected_end > 0.1:
+            skipped += offset - expected_end
+            tail = np.zeros(0, np.float32)
+        window = np.concatenate([tail, new_audio])
+        window_start = offset - len(tail) / 16000
+        end = offset + len(new_audio) / 16000
+        started = time.monotonic()
+        detection = model_request("analyze", window)
+        segments = detection["segments"]
+        # Embed short speech spans separately: one mixed-voice window must not
+        # gradually drag a person's identity centroid toward the next speaker.
+        turns = []
+        for segment in segments:
+            first, last = max(0,int(segment["start"]*16000)), min(len(window),int(segment["end"]*16000))
+            length = last - first
+            count = max(1, length // 32000)
+            for indices in np.array_split(np.arange(first,last), count):
+                if len(indices) == 0:
+                    continue
+                first_sample, last_sample = int(indices[0]), int(indices[-1])+1
+                label = identities.identify(window[first_sample:last_sample], set())
+                turns.append(dict(start=window_start+first_sample/16000,end=window_start+last_sample/16000,speaker=label))
+        data = decode_asr(window) if turns else {"words": []}
+        words = label_words(data.get("words", []), turns, window_start, group=False)
+        fresh = [w for w in words if w["end"] > committed_end + 0.04 and w["start"] >= committed_end - 0.08]
+        pending = [w for w in fresh if w["end"] > end - 1.0]
+        settled = [w for w in fresh if w["end"] <= end - 1.0]
+        stable.extend(settled)
+        if settled:
+            committed_end = settled[-1]["end"]
+        expected_end = end
+        tail = window[-6*16000:]
+        if segments and detection["turnComplete"]:
+            boundary = window_start + segments[-1]["end"]
+            if not boundaries or boundary > boundaries[-1] + .1: boundaries.append(boundary)
+        print(json.dumps(dict(turns=compact_words(mark_paragraphs(stable + pending, boundaries)), audioEnd=end,
+            processingSeconds=time.monotonic()-started, skippedSeconds=skipped,
+            speechDetected=detection.get("speechDetected", False), speechProbability=detection["speechProbability"],
+            turnProbability=detection["turnProbability"], turnComplete=detection["turnComplete"], turnBoundaries=boundaries), ensure_ascii=False), flush=True)
 
 
 def create_title(config, home, turns):

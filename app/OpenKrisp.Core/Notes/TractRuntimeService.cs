@@ -17,13 +17,14 @@ public sealed class TractRuntimeService : ObservableObject, IDisposable
     private TaskCompletionSource _loaded = NewSignal();
     private string _state = "stopped", _message = "Waiting to start", _token = "", _url = "";
     private bool _busy;
+    private bool _disposed;
     private static TaskCompletionSource NewSignal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
     public string State { get => _state; private set { if (SetField(ref _state, value)) { OnPropertyChanged(nameof(IsLoaded)); Refresh(); } } }
     public string Message { get => _message; private set => SetField(ref _message, value); }
     public bool IsLoaded => State == "loaded";
     public bool IsBusy { get => _busy; private set { if (SetField(ref _busy, value)) Refresh(); } }
     public bool CanManage => !IsBusy && !_inUse();
-    public string Backend => "Whistle ASR + Smart Turn: Tract CUDA. Speech segmentation: Tract CPU. No PyTorch.";
+    public string Backend => "Parakeet Ultra FP16 ASR: native CUDA. Smart Turn: Tract CUDA. Speech segmentation: Tract CPU. No PyTorch.";
     public string NotesBackend => "Notes: Qwen2.5-7B-Instruct-1M Q4_K_M · CUDA memory fitting · 16K working context with full-transcript section processing. Loaded on Summarize and released afterwards.";
     public string ModelDirectory => Path.Combine(_worker.Home, "models");
     public string DownloadStatus => Directory.Exists(ModelDirectory) ? "Model files: " + ModelDirectory : "Models will download automatically";
@@ -38,7 +39,7 @@ public sealed class TractRuntimeService : ObservableObject, IDisposable
     public void Refresh() { OnPropertyChanged(nameof(CanManage)); OnPropertyChanged(nameof(DownloadStatus)); }
     public void Configure(ProcessStartInfo start)
     {
-        if (!IsLoaded || _url.Length == 0) throw new InvalidOperationException("Whistle GPU models are not loaded. Open Status to load them.");
+        if (!IsLoaded || _url.Length == 0) throw new InvalidOperationException("Parakeet Ultra GPU models are not loaded. Open Status to load them.");
         start.Environment["OPENKRISP_ASR_URL"] = _url;
         start.Environment["OPENKRISP_ASR_TOKEN"] = _token;
     }
@@ -61,6 +62,31 @@ public sealed class TractRuntimeService : ObservableObject, IDisposable
         await _worker.InstallAsync(_messages, CancellationToken.None, redownloadAsr: true);
         await StartHostAsync();
     });
+
+    // Notes and recording are mutually exclusive. Release ASR's CUDA allocation
+    // while Qwen summarizes so both large models do not compete for an 8 GB GPU.
+    public async Task<T> WithModelsReleasedAsync<T>(Func<Task<T>> generate, IProgress<string> progress)
+    {
+        if (IsBusy) throw new InvalidOperationException("Wait for model setup to finish before summarizing.");
+        if (!IsLoaded) return await generate();
+        IsBusy = true;
+        try
+        {
+            progress.Report("Releasing ASR GPU memory for Qwen notes…");
+            await StopHostAsync();
+            return await generate();
+        }
+        finally
+        {
+            if (!_disposed)
+            {
+                progress.Report("Restoring Parakeet Ultra and Smart Turn on GPU…");
+                try { await StartHostAsync(); }
+                catch (Exception error) { State = "error"; Message = "Notes processing ended; ASR could not reload: " + error.Message; }
+            }
+            IsBusy = false;
+        }
+    }
 
     private async Task RunAsync(Func<Task> operation)
     {
@@ -147,6 +173,7 @@ public sealed class TractRuntimeService : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        _disposed = true;
         var process = _process; _process = null;
         if (process is null) return;
         try { if (!process.HasExited) process.Kill(entireProcessTree: true); }

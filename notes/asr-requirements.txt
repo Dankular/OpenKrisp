@@ -1,0 +1,4 @@
+# Installed with --no-deps: the CUDA provider includes the native library and
+# CPU support kernels; the wrapper's default CPU-only provider is unnecessary.
+transcribe-cpp @ https://github.com/handy-computer/transcribe.cpp/releases/download/v0.4.1/transcribe_cpp-0.4.1-py3-none-any.whl#sha256=f373b6e20a4d897ed0dcaa2fe7fae183379777432b3a76641c42506c77b442ad
+transcribe-cpp-native-cu12 @ https://github.com/handy-computer/transcribe.cpp/releases/download/v0.4.1/transcribe_cpp_native_cu12-0.4.1-py3-none-win_amd64.whl#sha256=7af39bbbddd79039d9b2d400ab96c7248b1ad5073be2d4161dafddb649bfe7d1

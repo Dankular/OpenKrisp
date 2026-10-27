@@ -6,7 +6,7 @@ using System.Threading.Channels;
 
 namespace OpenKrisp.Core.Notes;
 
-/// <summary>Bounded PCM pipe to Whistle; final recording never depends on preview speed.</summary>
+/// <summary>Bounded PCM pipe to Parakeet Ultra; final recording never depends on preview speed.</summary>
 internal sealed class LiveTranscriptSession : ILiveTranscript
 {
     private readonly Process _process;
@@ -25,7 +25,7 @@ internal sealed class LiveTranscriptSession : ILiveTranscript
         foreach (var arg in new[] { script, "live", "--home", home, "--speakers", speakers.ToString() }) start.ArgumentList.Add(arg);
         start.Environment["PYTHONUTF8"] = "1";
         configure?.Invoke(start);
-        _process = Process.Start(start) ?? throw new IOException("Could not start Whistle live preview.");
+        _process = Process.Start(start) ?? throw new IOException("Could not start Parakeet Ultra live preview.");
         _run = RunAsync(preview);
     }
 

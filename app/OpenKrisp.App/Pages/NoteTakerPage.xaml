@@ -33,7 +33,7 @@
                 </Grid>
                 <TextBox Header="Tags" PlaceholderText="Project, course, topic" Text="{x:Bind NotesVm.NewTags, Mode=TwoWay}"/>
                 <TextBlock Text="{x:Bind NotesVm.ModelStatus, Mode=OneWay}" TextWrapping="Wrap" Style="{StaticResource MutedTextStyle}"/>
-                <TextBlock Text="Whistle: English, German, French, Spanish, Italian, Dutch and Polish. Audio and notes remain local." TextWrapping="Wrap" Style="{StaticResource MutedTextStyle}"/>
+                <TextBlock Text="Parakeet Ultra: 25 European languages, including English, German, French, Spanish, Italian, Dutch and Polish. Audio and notes remain local." TextWrapping="Wrap" Style="{StaticResource MutedTextStyle}"/>
                 <Button Content="Set up / load local models" Click="SetUpModels_Click" IsEnabled="{x:Bind NotesVm.CanSetUp, Mode=OneWay}"/>
             </StackPanel>
         </Expander>
