@@ -34,14 +34,15 @@ public sealed partial class ActionItemsPage : Page
             var due = new CalendarDatePicker { Header = "Due date (optional)", PlaceholderText = "No due date" };
             if (view?.Item.Due is { } date) due.Date = new DateTimeOffset(date.ToDateTime(TimeOnly.MinValue));
             var clearDue = new Button { Content = "Clear due date" };
-            clearDue.Click += (_, _) => due.Date = null;
+            var dueText = new TextBox { Header = "Deadline as stated (optional)", Text = view?.Item.DueTextSource ?? "", PlaceholderText = "e.g. by Friday; an exact date can be set above" };
+            clearDue.Click += (_, _) => { due.Date = null; dueText.Text = ""; };
             var meetings = new ComboBox { Header = "Meeting", ItemsSource = Vm.Meetings, DisplayMemberPath = "Title", HorizontalAlignment = HorizontalAlignment.Stretch };
             meetings.SelectedItem = Vm.Meetings.FirstOrDefault(m => m.Id == view?.Item.MeetingId) ?? Vm.Meetings.FirstOrDefault();
             meetings.IsEnabled = view is null;
             var newMeeting = new TextBox { Header = "Or create a meeting for this item", PlaceholderText = "Meeting title", Visibility = view is null ? Visibility.Visible : Visibility.Collapsed };
             var validation = new TextBlock { TextWrapping = TextWrapping.Wrap };
             var panel = new StackPanel { Spacing = 12 };
-            foreach (var element in new FrameworkElement[] { text, kind, assignee, due, clearDue, meetings, newMeeting, validation }) panel.Children.Add(element);
+            foreach (var element in new FrameworkElement[] { text, kind, assignee, due, dueText, clearDue, meetings, newMeeting, validation }) panel.Children.Add(element);
             var dialog = new ContentDialog { Title = view is null ? "Add item" : "Edit item", Content = new ScrollViewer { Content = panel, MaxHeight = 560 }, PrimaryButtonText = "Save", CloseButtonText = "Cancel", XamlRoot = XamlRoot };
             dialog.PrimaryButtonClick += (_, args) => {
                 if (string.IsNullOrWhiteSpace(text.Text) || (view is null && meetings.SelectedItem is null && string.IsNullOrWhiteSpace(newMeeting.Text)))
@@ -55,9 +56,9 @@ public sealed partial class ActionItemsPage : Page
             {
                 var meeting = !string.IsNullOrWhiteSpace(newMeeting.Text) ? Vm.AddMeeting(newMeeting.Text) : meetings.SelectedItem as Meeting ?? throw new InvalidOperationException("Choose a meeting.");
                 var item = Vm.AddItem(meeting.Id, text.Text);
-                Vm.EditItem(item.Id, text.Text, owner, deadline, (string)kind.SelectedItem);
+                Vm.EditItem(item.Id, text.Text, owner, deadline, (string)kind.SelectedItem, dueText.Text);
             }
-            else Vm.EditItem(view.Id, text.Text, owner, deadline, (string)kind.SelectedItem);
+            else Vm.EditItem(view.Id, text.Text, owner, deadline, (string)kind.SelectedItem, dueText.Text);
         }
         catch (Exception error) { await ShowErrorAsync(error.Message); }
     }

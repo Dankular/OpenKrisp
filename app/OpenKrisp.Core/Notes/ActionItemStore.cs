@@ -102,6 +102,8 @@ public sealed class ActionItemStore
             meeting.Summary = "";
             meeting.KeyPoints.Clear();
             meeting.Topics.Clear();
+            meeting.Decisions.Clear(); meeting.OpenQuestions.Clear(); meeting.Risks.Clear();
+            meeting.SummaryModel = ""; meeting.SummaryWorkingContext = meeting.SummarySourceSections = 0;
             meeting.SummarizedAt = null;
             MergeInsights(meeting, MeetingInsightExtractor.Extract(meeting, meeting.Transcript), replace: true);
         });
@@ -120,37 +122,50 @@ public sealed class ActionItemStore
                 // Keep only commitments supported by a literal quote from this transcript.
                 if (string.IsNullOrWhiteSpace(action.Evidence) || !meeting.Transcript.Any(t => t.Text.Contains(action.Evidence, StringComparison.OrdinalIgnoreCase))) continue;
                 if (actions.Any(a => string.Equals(a.Text, action.Text.Trim(), StringComparison.OrdinalIgnoreCase))) continue;
-                var previous = _data.Items.FirstOrDefault(i => i.MeetingId == meetingId && i.GeneratedFromTranscript && (string.Equals(i.Text, action.Text.Trim(), StringComparison.OrdinalIgnoreCase) || string.Equals(i.Evidence, action.Evidence, StringComparison.OrdinalIgnoreCase)));
+                var previous = _data.Items.FirstOrDefault(i => i.MeetingId == meetingId && i.GeneratedFromTranscript && !actions.Any(a => a.Id == i.Id)
+                    && (string.Equals(i.Text, action.Text.Trim(), StringComparison.OrdinalIgnoreCase) || EvidenceMatches(i.Evidence, action.Evidence)));
                 DateOnly? due = DateOnly.TryParseExact(action.Due, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
                     System.Globalization.DateTimeStyles.None, out var date) && action.Evidence.Contains(action.Due) ? date : null;
                 var source = meeting.Transcript.First(t => t.Text.Contains(action.Evidence, StringComparison.OrdinalIgnoreCase));
                 if (previous?.UserEdited == true) { actions.Add(previous); continue; }
-                if (meeting.SuppressedActionEvidence.Contains(action.Evidence, StringComparer.OrdinalIgnoreCase)) continue;
+                if (meeting.SuppressedActionEvidence.Any(q => EvidenceMatches(q, action.Evidence))) continue;
                 actions.Add(new ActionItem {
                     Id = previous?.Id ?? Guid.NewGuid(), MeetingId = meetingId, Text = action.Text.Trim(),
                     Assignee = !string.IsNullOrWhiteSpace(action.Assignee) && meeting.Transcript.Any(t =>
                         string.Equals(t.Speaker, action.Assignee, StringComparison.OrdinalIgnoreCase) || t.Text.Contains(action.Assignee, StringComparison.OrdinalIgnoreCase))
                         ? action.Assignee : "", Due = due, Evidence = action.Evidence,
                     CapturedAt = meeting.StartedAt.AddSeconds(source.Start), GeneratedFromTranscript = true, Done = previous?.Done ?? false,
+                    Kind = action.Kind is "Decision" or "Follow-up" ? action.Kind : "Task",
+                    DueTextSource = !string.IsNullOrWhiteSpace(action.DueText) && action.Evidence.Contains(action.DueText, StringComparison.OrdinalIgnoreCase) ? action.DueText.Trim() : "",
                 });
             }
-            MergeInsights(meeting, actions, replace: false);
+            // Replace draft extraction with the model's refined task wording, preserving user edits and completion IDs.
+            _data.Items.RemoveAll(i => i.MeetingId == meetingId && i.GeneratedFromTranscript && !i.UserEdited
+                && (!i.Done || actions.Any(a => a.Id == i.Id)));
+            foreach (var action in actions)
+                if (_data.Items.All(i => i.Id != action.Id)) _data.Items.Add(action);
             meeting.Summary = summary.Summary;
             meeting.KeyPoints = summary.KeyPoints.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
             meeting.Topics = summary.Topics;
+            meeting.Decisions = summary.Decisions;
+            meeting.OpenQuestions = summary.OpenQuestions;
+            meeting.Risks = summary.Risks;
+            meeting.SummaryModel = summary.Model;
+            meeting.SummaryWorkingContext = summary.WorkingContext;
+            meeting.SummarySourceSections = summary.SourceSections;
             meeting.SummarizedAt = DateTimeOffset.Now;
         });
     }
 
     public bool SetDone(Guid id, bool done) => Update(id, i => i.Done = done);
-    public bool SetDue(Guid id, DateOnly? due) => Update(id, i => { i.Due = due; i.UserEdited = true; });
+    public bool SetDue(Guid id, DateOnly? due) => Update(id, i => { i.Due = due; i.DueTextSource = ""; i.UserEdited = true; });
     public bool SetAssignee(Guid id, string assignee) => Update(id, i => { i.Assignee = assignee.Trim(); i.UserEdited = true; });
 
-    public bool EditItem(Guid id, string text, string assignee, DateOnly? due, string kind)
+    public bool EditItem(Guid id, string text, string assignee, DateOnly? due, string kind, string dueText = "")
     {
         if (string.IsNullOrWhiteSpace(text)) throw new ArgumentException("An item needs text.");
         if (kind is not ("Task" or "Decision" or "Follow-up")) throw new ArgumentException("Unknown item type.");
-        return Update(id, i => { i.Text = text.Trim(); i.Assignee = assignee.Trim(); i.Due = due; i.Kind = kind; i.UserEdited = true; });
+        return Update(id, i => { i.Text = text.Trim(); i.Assignee = assignee.Trim(); i.Due = due; i.Kind = kind; i.DueTextSource = dueText.Trim(); i.UserEdited = true; });
     }
 
     public void UpdateLiveInsights(Guid meetingId, IReadOnlyList<TranscriptTurn> turns)
@@ -167,6 +182,8 @@ public sealed class ActionItemStore
     }
 
     private static bool SameEvidence(ActionItem a, ActionItem b) => a.Evidence.Length > 0 && string.Equals(a.Evidence, b.Evidence, StringComparison.OrdinalIgnoreCase);
+    private static bool EvidenceMatches(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase)
+        || (Math.Min(a.Length, b.Length) >= 16 && (a.Contains(b, StringComparison.OrdinalIgnoreCase) || b.Contains(a, StringComparison.OrdinalIgnoreCase)));
 
     private void MergeInsights(Meeting meeting, IReadOnlyList<ActionItem> candidates, bool replace)
     {

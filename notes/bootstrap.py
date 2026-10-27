@@ -3,7 +3,6 @@ import argparse
 import json
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import urllib.request
@@ -13,11 +12,43 @@ LLAMA_TAG = "b11913"
 TITLE_REPO = "SupraLabs/supra-title-50M-pre-gguf"
 TITLE_REVISION = "375f819a5c485afd7ab01c056dc9378e470ab923"
 TITLE_FILE = "SupraTitle-50M-Q8_0.gguf"
-BART_REPO = "Xenova/bart-large-cnn"
-BART_REVISION = "a7823edec55686ab84d3307fbccfd4af3b81e6dc"
-BART_FILES = ["config.json", "generation_config.json", "tokenizer.json", "onnx/encoder_model_quantized.onnx", "onnx/decoder_model_merged_quantized.onnx"]
+NOTES_REPO = "bartowski/Qwen2.5-7B-Instruct-1M-GGUF"
+NOTES_REVISION = "381ac2097f05bff2f77e7e3864239c11e521c3d3"
+NOTES_FILE = "Qwen2.5-7B-Instruct-1M-Q4_K_M.gguf"
 WHISTLE_ONNX_REVISION = "14fc92cb09ad5c271fe9a4ec4be70274790050d2"
 TURN_REVISION = "dbd03130e87854011fa8c2f203077f2cbfc3adad"
+
+
+def install_notes_runtime(home):
+    binary_dir=home/'qwen-runtime'
+    if all((binary_dir/name).exists() for name in ['llama-server.exe','llama-server-impl.dll','mtmd.dll','ggml-cuda.dll','llama-common.dll']):
+        return binary_dir/'llama-server.exe'
+    binary_dir.mkdir(exist_ok=True)
+    archive_path=home/'qwen-cuda-runtime.zip'
+    if not archive_path.exists() or not zipfile.is_zipfile(archive_path):
+        print('Downloading the native Qwen CUDA runtime…',flush=True)
+        temporary=home/'qwen-cuda-runtime.zip.part'
+        urllib.request.urlretrieve(f'https://github.com/ggml-org/llama.cpp/releases/download/{LLAMA_TAG}/llama-{LLAMA_TAG}-bin-win-cuda-12.4-x64.zip',temporary)
+        temporary.replace(archive_path)
+    required={'llama-server.exe','llama-server-impl.dll','mtmd.dll','llama.dll','llama-common.dll','ggml.dll','ggml-base.dll','ggml-cuda.dll','ggml-cpu.dll','libomp.dll'}
+    with zipfile.ZipFile(archive_path) as archive:
+        for member in archive.infolist():
+            name=Path(member.filename).name
+            if name in required or (name.startswith('ggml-cpu-') and name.endswith('.dll')) or name.startswith('LICENSE'):
+                (binary_dir/name).write_bytes(archive.read(member))
+    # Reuse installed CUDA 12 libraries; download the runtime DLLs only if CUDA 12 is absent.
+    cuda_root=Path(os.environ.get('ProgramFiles',r'C:\Program Files'))/'NVIDIA GPU Computing Toolkit'/'CUDA'
+    available=any(list(cuda_root.glob('v12*/bin/cublas64_12.dll'))+list(cuda_root.glob('v12*/bin/x64/cublas64_12.dll')))
+    if not available:
+        deps=home/'qwen-cudart.zip'
+        urllib.request.urlretrieve(f'https://github.com/ggml-org/llama.cpp/releases/download/{LLAMA_TAG}/cudart-llama-bin-win-cuda-12.4-x64.zip',deps)
+        with zipfile.ZipFile(deps) as archive:
+            for member in archive.infolist():
+                name=Path(member.filename).name
+                if name.endswith('.dll'): (binary_dir/name).write_bytes(archive.read(member))
+        deps.unlink()
+    archive_path.unlink()
+    return binary_dir/'llama-server.exe'
 
 
 def main():
@@ -64,10 +95,9 @@ def main():
         (model_dir / "segmentation.onnx").write_bytes(archive.extractfile(member).read())
     print("Downloading Supra 50M title model (56 MB)...", flush=True)
     title_model = hf_hub_download(TITLE_REPO, TITLE_FILE, revision=TITLE_REVISION, local_dir=model_dir / "supra-title")
-    print("Downloading quantized BART summary models (463 MB)...", flush=True)
-    bart_dir = model_dir / "bart"
-    for filename in BART_FILES:
-        hf_hub_download(BART_REPO, filename, revision=BART_REVISION, local_dir=bart_dir)
+    print("Downloading Qwen2.5-7B-Instruct-1M Q4_K_M notes model (4.68 GB)...", flush=True)
+    notes_model=hf_hub_download(NOTES_REPO,NOTES_FILE,revision=NOTES_REVISION,local_dir=model_dir/'qwen-notes')
+    notes_server=install_notes_runtime(home)
     binary_dir = home / "title-runtime"
     binary_dir.mkdir(exist_ok=True)
     if not (binary_dir / "llama-completion.exe").exists():
@@ -81,10 +111,11 @@ def main():
                 if name in required or (name.startswith("ggml-cpu-") and name.endswith(".dll")) or name.startswith("LICENSE"):
                     (binary_dir / name).write_bytes(archive.read(member))
         archive_path.unlink()
-    config = {"notesBackend": "supra-bart", "asrBackend": "tract-cuda", "python": str(python),
+    config = {"notesBackend": "qwen2.5-1m", "asrBackend": "tract-cuda", "python": str(python),
               "whistleOnnxDirectory": str(asr_dir), "smartTurnDirectory": str(turn_dir),
               "segmentation": str(model_dir / "segmentation.onnx"), "embedding": str(model_dir / "embedding.onnx"),
-              "titleModel": str(title_model), "titleCli": str(binary_dir / "llama-completion.exe"), "bartDirectory": str(bart_dir)}
+              "titleModel": str(title_model), "titleCli": str(binary_dir / "llama-completion.exe"),
+              "notesModel":str(notes_model),"notesServer":str(notes_server),"notesContext":16384}
     destination = home / ("config.pending.json" if args.prepare_only else "config.json")
     temporary = destination.with_suffix(".tmp")
     temporary.write_text(json.dumps(config, indent=2), encoding="utf-8")

@@ -105,8 +105,18 @@ public sealed partial class NoteTakerPage : Page
                 text.AppendLine().AppendLine("## " + topic.Title);
                 foreach (var point in topic.Points) text.AppendLine("- " + point);
             }
+            foreach (var section in new[] { ("Decisions", card.Decisions), ("Open questions", card.OpenQuestions), ("Risks and blockers", card.Risks) })
+            {
+                if (section.Item2.Count == 0) continue;
+                text.AppendLine().AppendLine("## " + section.Item1);
+                foreach (var point in section.Item2) text.AppendLine("- " + point);
+            }
             text.AppendLine().AppendLine("## Action items");
-            foreach (var item in card.ActionItems) text.AppendLine($"- [{(item.Done ? "x" : " ")}] {item.Text} ({item.AssigneeText})");
+            foreach (var item in card.Tasks)
+            {
+                text.AppendLine($"- [{(item.Done ? "x" : " ")}] {item.Text} ({item.AssigneeText}" + (item.HasDue ? "; " + item.DueText : "") + ")");
+                if (item.Evidence.Length > 0) text.AppendLine("  - Source: " + item.Evidence);
+            }
             text.AppendLine().AppendLine("## Transcript");
             foreach (var turn in card.Turns) text.AppendLine($"[{turn.TimeText}] {turn.Speaker}: {turn.Text}").AppendLine();
             await FileIO.WriteTextAsync(file, text.ToString());

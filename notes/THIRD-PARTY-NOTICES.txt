@@ -18,6 +18,8 @@ Its Whisper-derived encoder is used solely for end-of-turn classification.
 Other downloaded models
 -----------------------
 Supra Title: https://huggingface.co/SupraLabs/supra-title-50m-pre
-BART ONNX: https://huggingface.co/Xenova/bart-large-cnn
+Qwen2.5-7B-Instruct-1M: https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-1M
+GGUF conversion: https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-1M-GGUF
+Native CUDA notes runtime: https://github.com/ggml-org/llama.cpp (b11913)
 Segmentation/embeddings: https://github.com/k2-fsa/sherpa-onnx
 Model weights retain their upstream licenses and are not committed to this repository.

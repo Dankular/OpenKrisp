@@ -1,4 +1,4 @@
-"""Offline Whistle transcription, ONNX diarization, Supra titles, and BART notes."""
+"""Offline Whistle transcription, ONNX diarization, Supra titles, and Qwen notes."""
 import argparse
 import gc
 import json
@@ -137,7 +137,7 @@ from note_models import chunk_lines
 
 
 def summarize(config, home, turns):
-    from note_models import summarize_notes
+    from qwen_notes import summarize_notes
     return summarize_notes(config, home, turns, progress)
 
 

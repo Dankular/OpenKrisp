@@ -24,6 +24,7 @@ public sealed class TractRuntimeService : ObservableObject, IDisposable
     public bool IsBusy { get => _busy; private set { if (SetField(ref _busy, value)) Refresh(); } }
     public bool CanManage => !IsBusy && !_inUse();
     public string Backend => "Whistle ASR + Smart Turn: Tract CUDA. Speech segmentation: Tract CPU. No PyTorch.";
+    public string NotesBackend => "Notes: Qwen2.5-7B-Instruct-1M Q4_K_M · CUDA memory fitting · 16K working context with full-transcript section processing. Loaded on Summarize and released afterwards.";
     public string ModelDirectory => Path.Combine(_worker.Home, "models");
     public string DownloadStatus => Directory.Exists(ModelDirectory) ? "Model files: " + ModelDirectory : "Models will download automatically";
 

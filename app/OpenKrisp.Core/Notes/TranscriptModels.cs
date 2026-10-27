@@ -21,11 +21,21 @@ public sealed record LiveTranscriptUpdate(IReadOnlyList<TranscriptTurn> Turns, d
 
 public sealed record NoteTopic(string Title, IReadOnlyList<string> Points);
 
-public sealed record GeneratedAction(string Text, string Assignee, string Due, string Evidence);
+public sealed record GeneratedAction(string Text, string Assignee, string Due, string Evidence)
+{
+    public string Kind { get; init; } = "Task";
+    public string DueText { get; init; } = "";
+}
 public sealed record MeetingSummary(string Summary, IReadOnlyList<string> KeyPoints, IReadOnlyList<GeneratedAction> ActionItems)
 {
     public string Title { get; init; } = "";
     public List<NoteTopic> Topics { get; init; } = new();
+    public List<string> Decisions { get; init; } = new();
+    public List<string> OpenQuestions { get; init; } = new();
+    public List<string> Risks { get; init; } = new();
+    public string Model { get; init; } = "";
+    public int WorkingContext { get; init; }
+    public int SourceSections { get; init; }
 }
 
 public interface ILiveTranscript : IDisposable
@@ -71,8 +81,16 @@ public sealed class TranscriptCard
     public string Tags => string.Join(", ", Meeting.Tags);
     public string AudioPath => Meeting.AudioPath;
     public IReadOnlyList<NoteTopic> Topics => Meeting.Topics;
+    public IReadOnlyList<string> Decisions => Meeting.Decisions.Concat(ActionItems.Where(i => i.Kind == "Decision").Select(i => i.Text)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    public IReadOnlyList<string> OpenQuestions => Meeting.OpenQuestions;
+    public IReadOnlyList<string> Risks => Meeting.Risks;
+    public bool HasDecisions => Decisions.Count > 0;
+    public bool HasOpenQuestions => OpenQuestions.Count > 0;
+    public bool HasRisks => Risks.Count > 0;
+    public IReadOnlyList<ActionItemView> Tasks => ActionItems.Where(i => i.Kind != "Decision").ToList();
+    public string ActionStatus => Meeting.SummarizedAt is null ? "Live-captured items are refined when you summarize." : Tasks.Count == 0 ? "No explicit tasks or follow-ups were agreed in this recording." : "Tasks and follow-ups grounded in the transcript. Unspecified owners and dates remain unassigned.";
     public IReadOnlyList<TranscriptTurn> Turns => TranscriptParagraphs.Combine(Meeting.Transcript);
     public string Summary => Meeting.Summary;
     public IReadOnlyList<string> KeyPoints => Meeting.KeyPoints;
-    public string SummaryStatus => Meeting.SummarizedAt is { } at ? $"Generated locally {at.ToLocalTime():g}" : "Not summarized";
+    public string SummaryStatus => Meeting.SummarizedAt is { } at ? $"Generated locally {at.ToLocalTime():g}" + (Meeting.SummaryModel.Length > 0 ? " · " + Meeting.SummaryModel : "") : "Click Summarize for detailed notes, decisions and actionable follow-ups.";
 }

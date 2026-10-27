@@ -31,7 +31,8 @@ tools\
                    driver on a test machine (see docs/virtual-mic.md in the repository).
 
 Models download and load automatically. Status provides Load, Unload, Redownload ASR and Restart Tract.
-Python 3.12+ and compatible NVIDIA CUDA 13 libraries are required; models/runtime download about 800 MB once.
+Python 3.12+ and compatible NVIDIA CUDA 13 libraries are required; models/runtime download about 5 GB once.
 Record or import audio, then use Summarize above each saved transcript for key points, topics and action items.
-Whistle ASR and Smart Turn execute on Tract CUDA. Supra 50M titles and BART summaries run locally.
+Whistle ASR and Smart Turn execute on Tract CUDA. Supra 50M titles and detailed Qwen2.5-7B-Instruct-1M notes run locally.
+The 1M checkpoint uses a 16K working context here; longer transcripts are processed fully in sections.
 Whistle supports English, German, French, Spanish, Italian, Dutch and Polish.

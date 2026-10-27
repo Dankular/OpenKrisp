@@ -24,7 +24,7 @@ public sealed class ActionItemView : ObservableObject
     public string MeetingTitle => _store.Meetings.FirstOrDefault(m => m.Id == Item.MeetingId)?.Title ?? "Meeting";
     public string Text => Item.Text;
     public string TimeText => Item.CapturedAt.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture);
-    public string DueText => Item.Due is { } d ? "Due " + d.ToString("MMM d", CultureInfo.InvariantCulture) : "Due date";
+    public string DueText => Item.Due is { } d ? "Due " + d.ToString("MMM d", CultureInfo.InvariantCulture) : Item.DueTextSource.Length > 0 ? "Due " + Item.DueTextSource : "No due date";
     public bool IsOverdue => Item.Due is { } d && !Item.Done && d < _today();
 
     public string AssigneeText => Item.Assignee switch
@@ -34,7 +34,7 @@ public sealed class ActionItemView : ObservableObject
         var name => name,
     };
 
-    public bool HasDue => Item.Due is not null;
+    public bool HasDue => Item.Due is not null || Item.DueTextSource.Length > 0;
     public bool HasAssignee => Item.Assignee.Length > 0;
 
     /// <summary>Letter shown in the assignee's avatar: "Y" for the user (as in "You"), otherwise the name's first letter, upper-cased. Empty when unassigned.</summary>
@@ -135,7 +135,7 @@ public sealed class ActionItemsViewModel : ObservableObject
         => _store.AddItem(meetingId, text, _filter == ActionItemFilter.AssignedToMe ? ActionItem.Me : "");
 
     public void RemoveItem(Guid id) => _store.Remove(id);
-    public void EditItem(Guid id, string text, string assignee, DateOnly? due, string kind) => _store.EditItem(id, text, assignee, due, kind);
+    public void EditItem(Guid id, string text, string assignee, DateOnly? due, string kind, string dueText = "") => _store.EditItem(id, text, assignee, due, kind, dueText);
 
     public string ExportMarkdown()
     {
@@ -153,7 +153,7 @@ public sealed class ActionItemsViewModel : ObservableObject
     {
         static string Cell(string value) => "\"" + value.Replace("\"", "\"\"") + "\"";
         var lines = new List<string> { "Type,Text,Meeting,Assignee,Due,Completed,Source" };
-        lines.AddRange(Items.Select(i => string.Join(",", new[] { i.Kind, i.Text, i.MeetingTitle, i.AssigneeText, i.Item.Due?.ToString("yyyy-MM-dd") ?? "", i.Done ? "Yes" : "No", i.Evidence }.Select(Cell))));
+        lines.AddRange(Items.Select(i => string.Join(",", new[] { i.Kind, i.Text, i.MeetingTitle, i.AssigneeText, i.Item.Due?.ToString("yyyy-MM-dd") ?? i.Item.DueTextSource, i.Done ? "Yes" : "No", i.Evidence }.Select(Cell))));
         return string.Join("\r\n", lines);
     }
 

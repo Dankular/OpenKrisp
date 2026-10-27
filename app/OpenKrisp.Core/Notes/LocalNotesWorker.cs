@@ -36,11 +36,11 @@ public sealed class LocalNotesWorker : ILocalNotesWorker
             {
                 using var config = JsonDocument.Parse(File.ReadAllText(Path.Combine(_home, "config.json")));
                 var root = config.RootElement;
-                return root.TryGetProperty("notesBackend", out var backend) && backend.GetString() == "supra-bart"
+                return root.TryGetProperty("notesBackend", out var backend) && backend.GetString() == "qwen2.5-1m"
                     && File.Exists(root.GetProperty("titleModel").GetString()) && File.Exists(root.GetProperty("titleCli").GetString())
                     && root.TryGetProperty("whistleOnnxDirectory", out var asr) && File.Exists(Path.Combine(asr.GetString()!, "onnx", "decoder.onnx.data"))
                     && root.TryGetProperty("smartTurnDirectory", out var turn) && File.Exists(Path.Combine(turn.GetString()!, "onnx", "model.onnx"))
-                    && File.Exists(Path.Combine(root.GetProperty("bartDirectory").GetString()!, "onnx", "decoder_model_merged_quantized.onnx"));
+                    && File.Exists(root.GetProperty("notesModel").GetString()) && File.Exists(root.GetProperty("notesServer").GetString());
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or KeyNotFoundException or InvalidOperationException or ArgumentException) { return false; }
         }

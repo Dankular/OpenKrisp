@@ -15,6 +15,12 @@ public sealed class Meeting
     public List<string> Tags { get; set; } = new();
     public List<NoteTopic> Topics { get; set; } = new();
     public List<string> SuppressedActionEvidence { get; set; } = new();
+    public List<string> Decisions { get; set; } = new();
+    public List<string> OpenQuestions { get; set; } = new();
+    public List<string> Risks { get; set; } = new();
+    public string SummaryModel { get; set; } = "";
+    public int SummaryWorkingContext { get; set; }
+    public int SummarySourceSections { get; set; }
 }
 
 public sealed class ActionItem
@@ -35,6 +41,7 @@ public sealed class ActionItem
     public string Evidence { get; set; } = "";
     public string Kind { get; set; } = "Task";
     public bool UserEdited { get; set; }
+    public string DueTextSource { get; set; } = "";
 }
 
 public sealed record ExtractedActionItem(string Text, string? Assignee, DateOnly? Due);
