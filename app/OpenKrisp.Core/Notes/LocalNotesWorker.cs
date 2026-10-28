@@ -53,6 +53,9 @@ public sealed class LocalNotesWorker : ILocalNotesWorker
         return live;
     }
 
+    public ILiveNotesSession StartLiveNotes(IProgress<LiveNotesUpdate> updates, IProgress<string> progress)
+        => new LiveNotesSession(Python, Path.Combine(_scripts, "worker.py"), _home, updates, progress);
+
     public Task InstallAsync(IProgress<string> progress, CancellationToken ct) => InstallAsync(progress, ct, false);
     public async Task InstallAsync(IProgress<string> progress, CancellationToken ct, bool redownloadAsr)
     {

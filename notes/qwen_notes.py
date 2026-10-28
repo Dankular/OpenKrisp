@@ -89,13 +89,14 @@ class QwenNotes:
             env['PATH']=os.pathsep.join(str(p) for p in paths if p.exists())+os.pathsep+env.get('PATH','')
             args=[self.config['notesServer'],'-m',self.config['notesModel'],'--host','127.0.0.1','--port',str(port),
                   '--api-key-file',str(self.keyfile),'--ctx-size',str(self.context),'--parallel','1',
-                  '--fit','on','--fit-ctx',str(self.context),'--fit-target','768',
+                  '--fit','on','--fit-ctx',str(self.context),'--fit-target',str(self.config.get('notesFitTarget',768)),
                   '--flash-attn','on','--cache-type-k','q8_0','--cache-type-v','q8_0',
-                  '--batch-size','512','--ubatch-size','128','--threads',str(min(6,os.cpu_count() or 2)),
+                  '--batch-size',str(self.config.get('notesBatch',512)),'--ubatch-size',str(self.config.get('notesMicroBatch',128)),
+                  '--threads',str(self.config.get('notesThreads',min(6,os.cpu_count() or 2))),
                   '--no-webui']
             self.progress('Loading Qwen2.5-7B-Instruct-1M locally with CUDA memory fitting…')
             self.process=subprocess.Popen(args,stdout=self.log,stderr=subprocess.STDOUT,env=env,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+                creationflags=(subprocess.CREATE_NO_WINDOW | (subprocess.BELOW_NORMAL_PRIORITY_CLASS if self.config.get('liveNotes') else 0)) if os.name=='nt' else 0)
             deadline=time.monotonic()+240
             while time.monotonic()<deadline:
                 if self.process.poll() is not None: raise RuntimeError('Qwen could not load: '+self.logfile.read_text(encoding='utf-8',errors='replace')[-1800:])

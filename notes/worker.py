@@ -283,7 +283,7 @@ def create_title(config, home, turns):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["transcribe", "summarize", "live", "title"])
+    parser.add_argument("command", choices=["transcribe", "summarize", "live", "live-notes", "title"])
     parser.add_argument("--home", required=True)
     parser.add_argument("--input")
     parser.add_argument("--output")
@@ -295,6 +295,10 @@ def main():
     config = json.loads((home / args.config).read_text(encoding="utf-8-sig"))
     if args.command == "live":
         live(config, args.speakers)
+        return
+    if args.command == "live-notes":
+        from live_notes import serve
+        serve(config, home, progress)
         return
     if not args.input or not args.output:
         parser.error("--input and --output are required")

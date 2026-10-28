@@ -21,6 +21,10 @@ public sealed class Meeting
     public string SummaryModel { get; set; } = "";
     public int SummaryWorkingContext { get; set; }
     public int SummarySourceSections { get; set; }
+    public string RunningSummary { get; set; } = "";
+    public List<string> RunningKeyPoints { get; set; } = new();
+    public double RunningSummaryThrough { get; set; }
+    public List<TranscriptTranslation> Translations { get; set; } = new();
 }
 
 public sealed class ActionItem

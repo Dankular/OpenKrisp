@@ -116,6 +116,12 @@ public sealed partial class NoteTakerPage : Page
             }
             text.AppendLine().AppendLine("## Transcript");
             foreach (var turn in card.Turns) text.AppendLine($"[{turn.TimeText}] {turn.Speaker}: {turn.Text}").AppendLine();
+            if (card.Translations.Count > 0)
+            {
+                text.AppendLine().AppendLine("## English translations");
+                foreach (var translation in card.Translations)
+                    text.AppendLine($"- {translation.Text} ({translation.Language}): {translation.Translation}");
+            }
             await FileIO.WriteTextAsync(file, text.ToString());
         }
         catch (Exception error) { await ShowErrorAsync(error.Message); }

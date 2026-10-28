@@ -96,7 +96,14 @@ public sealed class ActionItemStore
         Mutate(() =>
         {
             var meeting = _data.Meetings.Single(m => m.Id == meetingId);
+            if (meeting.Transcript.Count > 0)
+            {
+                meeting.RunningSummary = ""; meeting.RunningKeyPoints.Clear(); meeting.RunningSummaryThrough = 0;
+            }
             meeting.Transcript = turns.OrderBy(t => t.Start).ToList();
+            var paragraphs = TranscriptParagraphs.Combine(meeting.Transcript);
+            meeting.Translations = meeting.Translations.Where(a => paragraphs.Any(t => t.End >= a.Start && t.Start <= a.End
+                && t.Text.Contains(a.Text, StringComparison.OrdinalIgnoreCase))).ToList();
             meeting.TranscriptRevision++;
             meeting.AudioPath = audioPath;
             meeting.Summary = "";
@@ -106,6 +113,18 @@ public sealed class ActionItemStore
             meeting.SummaryModel = ""; meeting.SummaryWorkingContext = meeting.SummarySourceSections = 0;
             meeting.SummarizedAt = null;
             MergeInsights(meeting, MeetingInsightExtractor.Extract(meeting, meeting.Transcript), replace: true);
+        });
+    }
+
+    public void SaveRunningNotes(Guid meetingId, LiveNotesUpdate update)
+    {
+        Mutate(() =>
+        {
+            var meeting = _data.Meetings.Single(m => m.Id == meetingId);
+            meeting.RunningSummary = update.Summary;
+            meeting.RunningKeyPoints = update.KeyPoints.ToList();
+            meeting.RunningSummaryThrough = update.ThroughSeconds;
+            meeting.Translations = update.Translations.ToList();
         });
     }
 

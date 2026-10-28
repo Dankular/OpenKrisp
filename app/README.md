@@ -4,7 +4,7 @@ Local meeting and lecture recording, Parakeet Ultra transcription, speaker label
 
 ## Workspace
 
-- **Meetings:** one audio-source selector, a prominent fixed Record / Stop header, a searchable meeting list, and separate Notes and Recording & Transcript tabs. Summarize sits above the selected transcript.
+- **Meetings:** one audio-source selector, a prominent fixed Record / Stop header, a searchable meeting list, and separate Notes and Transcript tabs. Summarize sits above the selected transcript.
 - **Action items:** Assigned to me and All action items views, search and type filters, tasks/decisions/follow-ups, editable text/owners/due dates, manual additions, deletion, and Markdown/CSV export. Completed items sort to the bottom.
 - **Status:** model download and load progress, Tract state, Load, Unload, Redownload ASR and Restart Tract. Models install and load automatically. Lifecycle controls are disabled during recording and processing. Unload stops the model host to release GPU allocations.
 - **Noise cancellation:** the existing Rust DPDFNet engine and audio routing controls.
@@ -25,7 +25,9 @@ Summarize generates a connected multi-paragraph overview, substantive key points
 
 Live draft extraction still recognizes explicit commitments while recording; Summarize refines those drafts using Qwen. User edits, assignments, deadlines, completion state and deleted-item suppression survive regeneration. Speaker labels must be reassigned to **Me** when appropriate; the app does not guess which speaker is the user. Empty task lists are correct for recordings with no actual commitments.
 
-Summaries run only on click. Model notes are estimates, and speaker identities/turn boundaries can be wrong with overlap, short spans, music and noise. Review source quotes before treating an item as an obligation.
+Full detailed summaries run on click. During recording, a right-hand running-summary panel rewrites its overview and key points after three new stable paragraphs or about 180 new words in a long passage, at most once every 30 seconds. One pending snapshot replaces older pending work. The previous draft stays readable during generation. A separate local Qwen session uses a 4K context, small GPU batches, two CPU threads and CUDA memory fitting alongside Ultra; it never unloads ASR. Notes pause temporarily if live transcription falls more than 12 seconds behind. The toggle pauses both running notes and translations, releasing the live notes model. Stopping recording or closing the app terminates its process tree.
+
+The same update detects exact non-English source phrases and supplies contextual English translations. Foreign source spans are highlighted in the teleprompter with a smaller inline English gloss; the underlying transcript is unchanged. These annotations arrive with notes updates, rather than per recognized word. Draft notes and supported translations are saved with the meeting, appear after reopening, are searchable and export to Markdown. Final transcription drops annotations that no longer match its source text. Retranscribing an existing transcript clears its old running-summary draft. Model notes are estimates, and speaker identities/turn boundaries can be wrong with overlap, short spans, music and noise. Review source quotes before treating an item as an obligation.
 
 ## Setup and privacy
 

@@ -4,11 +4,12 @@
     <Grid Background="#F8FAFC" CornerRadius="12" RowSpacing="8" Padding="20,12,20,0">
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
         <Grid ColumnSpacing="16">
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                 <ToggleButton x:Name="ScrollToggle" Content="Auto-scroll" Click="ScrollToggle_Click" AutomationProperties.Name="Toggle transcript scrolling"/>
-                <TextBlock x:Name="ScrollHint" Text="Scroll at your own pace" Foreground="#64748B" VerticalAlignment="Center" TextWrapping="Wrap"/>
             </StackPanel>
+            <TextBlock x:Name="ScrollHint" Grid.Row="1" Grid.ColumnSpan="2" Margin="0,6,0,0" Text="Scroll at your own pace" FontSize="12" Foreground="#64748B" TextWrapping="Wrap"/>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
                 <Button Content="A−" Click="Smaller_Click" AutomationProperties.Name="Smaller transcript text"/>
                 <Button Content="A+" Click="Larger_Click" AutomationProperties.Name="Larger transcript text"/>

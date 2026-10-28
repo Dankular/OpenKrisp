@@ -20,6 +20,15 @@ public sealed record LiveTranscriptUpdate(IReadOnlyList<TranscriptTurn> Turns, d
 }
 
 public sealed record NoteTopic(string Title, IReadOnlyList<string> Points);
+public sealed record TranscriptTranslation(double Start, double End, string Text, string Translation, string Language);
+public sealed record LiveNotesUpdate(string Summary, IReadOnlyList<string> KeyPoints, IReadOnlyList<TranscriptTranslation> Translations, double ThroughSeconds)
+{
+    public string Error { get; init; } = "";
+}
+public interface ILiveNotesSession : IDisposable
+{
+    void Submit(IReadOnlyList<TranscriptTurn> turns);
+}
 
 public sealed record GeneratedAction(string Text, string Assignee, string Due, string Evidence)
 {
@@ -50,6 +59,7 @@ public interface ILocalNotesWorker
     bool IsPreparing => false;
     string RuntimeStatus => "";
     ILiveTranscript? StartLive(IProgress<LiveTranscriptUpdate> preview, int speakers = 0) => null;
+    ILiveNotesSession? StartLiveNotes(IProgress<LiveNotesUpdate> updates, IProgress<string> progress) => null;
     Task<string> CreateTitleAsync(IReadOnlyList<TranscriptTurn> transcript, IProgress<string> progress, CancellationToken ct) => Task.FromResult("");
     Task InstallAsync(IProgress<string> progress, CancellationToken ct);
     Task<IReadOnlyList<TranscriptTurn>> TranscribeAsync(string audioPath, int speakers, IProgress<string> progress, CancellationToken ct);
@@ -90,7 +100,10 @@ public sealed class TranscriptCard
     public IReadOnlyList<ActionItemView> Tasks => ActionItems.Where(i => i.Kind != "Decision").ToList();
     public string ActionStatus => Meeting.SummarizedAt is null ? "Live-captured items are refined when you summarize." : Tasks.Count == 0 ? "No explicit tasks or follow-ups were agreed in this recording." : "Tasks and follow-ups grounded in the transcript. Unspecified owners and dates remain unassigned.";
     public IReadOnlyList<TranscriptTurn> Turns => TranscriptParagraphs.Combine(Meeting.Transcript);
-    public string Summary => Meeting.Summary;
-    public IReadOnlyList<string> KeyPoints => Meeting.KeyPoints;
-    public string SummaryStatus => Meeting.SummarizedAt is { } at ? $"Generated locally {at.ToLocalTime():g}" + (Meeting.SummaryModel.Length > 0 ? " · " + Meeting.SummaryModel : "") : "Click Summarize for detailed notes, decisions and actionable follow-ups.";
+    public IReadOnlyList<TranscriptTranslation> Translations => Meeting.Translations;
+    public string Summary => Meeting.Summary.Length > 0 ? Meeting.Summary : Meeting.RunningSummary;
+    public IReadOnlyList<string> KeyPoints => Meeting.Summary.Length > 0 ? Meeting.KeyPoints : Meeting.RunningKeyPoints;
+    public string SummaryStatus => Meeting.SummarizedAt is { } at ? $"Generated locally {at.ToLocalTime():g}" + (Meeting.SummaryModel.Length > 0 ? " · " + Meeting.SummaryModel : "")
+        : Meeting.RunningSummary.Length > 0 ? $"Provisional running summary through {TimeSpan.FromSeconds(Meeting.RunningSummaryThrough):hh\\:mm\\:ss}. Click Summarize for complete notes."
+        : "Click Summarize for detailed notes, decisions and actionable follow-ups.";
 }
