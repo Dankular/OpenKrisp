@@ -1,4 +1,5 @@
 using OpenKrisp.Core.Common;
+using System.Text.Json;
 
 namespace OpenKrisp.Core.Notes;
 
@@ -14,9 +15,12 @@ public sealed class NoteTakerViewModel : ObservableObject, IDisposable
     private ILiveNotesSession? _liveNotes;
     private int _notesGeneration, _submittedParagraphs, _submittedWords;
     private DateTime _lastNotesRequest, _notesRetryAfter;
+    private DateTime _lastTranslationRequest;
+    private int _submittedTranslationWords;
+    private bool _foreignSpeech;
     private IReadOnlyList<TranscriptTurn> _liveStableTurns = Array.Empty<TranscriptTurn>();
     private bool _liveNotesEnabled = true, _liveNotesBusy;
-    private string _liveSummary = "", _liveSummaryStatus = "Updates after a few paragraphs. Foreign phrases receive inline English translations.";
+    private string _liveSummary = "", _liveSummaryStatus = "Context accumulates after a few paragraphs. Foreign speech is translated into English sooner.";
     private IReadOnlyList<string> _liveKeyPoints = Array.Empty<string>();
     private IReadOnlyList<TranscriptTranslation> _liveTranslations = Array.Empty<TranscriptTranslation>();
     public string LiveSummary { get => _liveSummary; private set => SetField(ref _liveSummary, value); }
@@ -24,6 +28,14 @@ public sealed class NoteTakerViewModel : ObservableObject, IDisposable
     public IReadOnlyList<string> LiveKeyPoints { get => _liveKeyPoints; private set => SetField(ref _liveKeyPoints, value); }
     public IReadOnlyList<TranscriptTranslation> LiveTranslations { get => _liveTranslations; private set => SetField(ref _liveTranslations, value); }
     public bool LiveNotesBusy { get => _liveNotesBusy; private set => SetField(ref _liveNotesBusy, value); }
+    private string _progressCaption = "Preparing recording…", _progressDetail = "", _stepsRemaining = "";
+    private double _processingProgress;
+    private bool _processingIndeterminate = true;
+    public string ProgressCaption { get => _progressCaption; private set => SetField(ref _progressCaption, value); }
+    public string ProgressDetail { get => _progressDetail; private set => SetField(ref _progressDetail, value); }
+    public string StepsRemaining { get => _stepsRemaining; private set => SetField(ref _stepsRemaining, value); }
+    public double ProcessingProgress { get => _processingProgress; private set => SetField(ref _processingProgress, value); }
+    public bool ProcessingIndeterminate { get => _processingIndeterminate; private set => SetField(ref _processingIndeterminate, value); }
     public bool LiveNotesEnabled
     {
         get => _liveNotesEnabled;
@@ -33,7 +45,8 @@ public sealed class NoteTakerViewModel : ObservableObject, IDisposable
             StopLiveNotes();
             _submittedParagraphs = _submittedWords = 0;
             _lastNotesRequest = _notesRetryAfter = default;
-            LiveSummaryStatus = value ? "Waiting for a few paragraphs to update notes and translations…" : "Paused · your last summary and translations are kept.";
+            _lastTranslationRequest = default; _submittedTranslationWords = 0;
+            LiveSummaryStatus = value ? "Context is retained; waiting for new speech to add notes or English translations…" : "Paused · your last summary and translations are kept.";
             if (value) QueueRunningNotes();
         }
     }
@@ -150,7 +163,7 @@ public sealed class NoteTakerViewModel : ObservableObject, IDisposable
         var meeting = _store.AddMeeting(string.IsNullOrWhiteSpace(title) ? Path.GetFileNameWithoutExtension(path) : title);
         _store.SetOrganization(meeting.Id, NewKindIndex == 1 ? "Lecture" : "Meeting", NewTags);
         _store.SaveTranscript(meeting.Id, Array.Empty<TranscriptTurn>(), savedAudio);
-        var turns = await _worker.TranscribeAsync(savedAudio, ExpectedSpeakers, progress, ct);
+        var turns = await _worker.TranscribeAsync(savedAudio, ExpectedSpeakers, progress, ct,meeting.Id.ToString());
         ct.ThrowIfCancellationRequested();
         _store.SaveTranscript(meeting.Id, turns, savedAudio);
         if (turns.Count > 0) _store.SetTitle(meeting.Id, await _worker.CreateTitleAsync(turns, progress, ct));
@@ -162,6 +175,8 @@ public sealed class NoteTakerViewModel : ObservableObject, IDisposable
         if (!CanStart) return;
         Error = "";
         IsBusy = true;
+        ProgressCaption = "Starting recording…"; ProgressDetail = ""; StepsRemaining = "";
+        ProcessingProgress = 0; ProcessingIndeterminate = true;
         try
         {
             var path = Path.Combine(_recordings, Guid.NewGuid() + ".wav");
@@ -172,10 +187,12 @@ public sealed class NoteTakerViewModel : ObservableObject, IDisposable
             StopLiveNotes();
             LiveSummary = ""; LiveKeyPoints = Array.Empty<string>(); LiveTranslations = Array.Empty<TranscriptTranslation>();
             _submittedParagraphs = _submittedWords = 0; _lastNotesRequest = _notesRetryAfter = default;
+            _lastTranslationRequest = default; _submittedTranslationWords = 0; _foreignSpeech = false;
             _liveStableTurns = Array.Empty<TranscriptTurn>();
-            LiveSummaryStatus = LiveNotesEnabled ? "Updates after a few paragraphs. Foreign phrases receive inline English translations." : "Running notes paused.";
+            LiveSummaryStatus = LiveNotesEnabled ? "Context accumulates after a few paragraphs. Foreign speech is translated into English sooner." : "Running notes paused.";
             _detectionAt = default;
             ResetMeter();
+            var recordingId = Guid.NewGuid();
             _live = _worker.StartLive(new Progress<LiveTranscriptUpdate>(update => {
                 if (!IsRecording && !IsBusy) return;
                 if (update.Error.Length > 0) { LiveStatus = update.Error; return; }
@@ -193,6 +210,7 @@ public sealed class NoteTakerViewModel : ObservableObject, IDisposable
                 }
                 LiveTurns = TranscriptParagraphs.Combine(update.Turns);
                 _liveStableTurns = TranscriptParagraphs.Combine(update.Turns.Where(t => t.End <= update.AudioEnd - 1).ToList());
+                _foreignSpeech = update.ForeignLanguage.Length > 0;
                 if (LiveNotesBusy && update.LatencySeconds > 12)
                 {
                     StopLiveNotes(); _notesRetryAfter = DateTime.UtcNow.AddSeconds(45);
@@ -202,10 +220,11 @@ public sealed class NoteTakerViewModel : ObservableObject, IDisposable
                 QueueRunningNotes();
                 LiveText = string.Join(" ", update.Turns.Select(t => t.Speaker + ": " + t.Text));
                 LiveStatus = $"Live speaker transcript · about {update.LatencySeconds:F1}s behind audio" +
-                    (update.SkippedSeconds > 0 ? " · preview caught up; final transcript includes all recorded audio" : "");
-            }), ExpectedSpeakers);
+                    (update.SkippedSeconds > 0 ? " · preview caught up; final transcript includes all recorded audio" : "")
+                    + (update.RagStatus.Length > 0 ? " · " + update.RagStatus : "");
+            }), ExpectedSpeakers,recordingId.ToString());
             await _recorder.StartAsync(path, RecordingSourceIndex, SelectedInput.Id);
-            _recording = _store.AddMeeting(string.IsNullOrWhiteSpace(title) ? $"Meeting {DateTime.Now:g}" : title);
+            _recording = _store.AddMeeting(string.IsNullOrWhiteSpace(title) ? $"Meeting {DateTime.Now:g}" : title,id:recordingId);
             _store.SetOrganization(_recording.Id, NewKindIndex == 1 ? "Lecture" : "Meeting", NewTags);
             RecordingPath = path;
             _store.SaveTranscript(_recording.Id, Array.Empty<TranscriptTurn>(), path);
@@ -223,6 +242,8 @@ public sealed class NoteTakerViewModel : ObservableObject, IDisposable
         StopLiveNotes();
         var meeting = _recording!;
         return RunAsync(async (progress, ct) => {
+            ProgressCaption = "Finishing recording and saving audio…";
+            StepsRemaining = "Read audio → Identify speakers → Detect speech → Transcribe chunks → Index transcript → Generate title";
             try
             {
                 await _recorder.StopAsync();
@@ -238,7 +259,7 @@ public sealed class NoteTakerViewModel : ObservableObject, IDisposable
             }
             LiveStatus = "Recording stopped; finalizing the transcript and speaker labels…";
             Status = "Recording saved. Transcribing locally…";
-            var turns = await _worker.TranscribeAsync(RecordingPath, ExpectedSpeakers, progress, ct);
+            var turns = await _worker.TranscribeAsync(RecordingPath, ExpectedSpeakers, progress, ct,meeting.Id.ToString());
             ct.ThrowIfCancellationRequested();
             _store.SaveTranscript(meeting.Id, turns, RecordingPath);
             LiveStatus = "Final transcript saved below.";
@@ -255,7 +276,7 @@ public sealed class NoteTakerViewModel : ObservableObject, IDisposable
 
     public Task TranscribeMeetingAsync(Guid meetingId) => RunAsync(async (progress, ct) => {
         var meeting = _store.Meetings.Single(m => m.Id == meetingId);
-        var turns = await _worker.TranscribeAsync(meeting.AudioPath, ExpectedSpeakers, progress, ct);
+        var turns = await _worker.TranscribeAsync(meeting.AudioPath, ExpectedSpeakers, progress, ct,meeting.Id.ToString());
         ct.ThrowIfCancellationRequested();
         _store.SaveTranscript(meetingId, turns, meeting.AudioPath);
         if (turns.Count > 0) _store.SetTitle(meetingId, await _worker.CreateTitleAsync(turns, progress, ct));
@@ -279,8 +300,32 @@ public sealed class NoteTakerViewModel : ObservableObject, IDisposable
         using var source = new CancellationTokenSource();
         _operation = source;
         IsBusy = true;
+        ProgressCaption = "Preparing processing…"; ProgressDetail = ""; StepsRemaining = "";
+        ProcessingProgress = 0; ProcessingIndeterminate = true;
         Error = "";
-        var progress = new Progress<string>(message => { if (ReferenceEquals(_operation, source) && !source.IsCancellationRequested && IsBusy) Status = message; });
+        var progress = new Progress<string>(message => {
+            if (!ReferenceEquals(_operation, source) || source.IsCancellationRequested || !IsBusy) return;
+            if (message.StartsWith('{'))
+            {
+                try
+                {
+                    using var data = JsonDocument.Parse(message); var root = data.RootElement;
+                    if (root.TryGetProperty("kind",out var kind) && kind.GetString()=="progress")
+                    {
+                        var step = root.GetProperty("step").GetInt32(); var steps = root.GetProperty("steps").GetInt32();
+                        var done = root.GetProperty("done").GetInt32(); var total = root.GetProperty("total").GetInt32();
+                        ProgressCaption = $"{root.GetProperty("label").GetString()} · step {step+1} of {steps}";
+                        ProgressDetail = total > 1 ? $"{done} of {total} chunks complete" : total==1 && done==1 ? "Complete" : "Working…";
+                        StepsRemaining = string.Join(" → ",root.GetProperty("remaining").EnumerateArray().Select(s=>s.GetString()));
+                        ProcessingIndeterminate = total <= 0;
+                        ProcessingProgress = 100 * (step + (total>0 ? (double)done/total : 0))/steps;
+                        Status = ProgressCaption; return;
+                    }
+                }
+                catch (JsonException) { }
+            }
+            Status = message;
+        });
         try { await operation(progress, source.Token); }
         catch (OperationCanceledException) { Status = "Processing cancelled. Saved audio and transcripts are kept."; }
         catch (Exception e) { Error = e.Message; Status = "Processing failed. Saved audio and transcripts are kept."; }
@@ -324,33 +369,37 @@ public sealed class NoteTakerViewModel : ObservableObject, IDisposable
 
     private void QueueRunningNotes()
     {
-        if (!LiveNotesEnabled || !IsRecording || IsBusy || DateTime.UtcNow < _notesRetryAfter
-            || DateTime.UtcNow - _lastNotesRequest < TimeSpan.FromSeconds(30)) return;
+        if (!LiveNotesEnabled || !IsRecording || IsBusy || DateTime.UtcNow < _notesRetryAfter) return;
         var stable = _liveStableTurns;
         // Exclude tentative words, while allowing a long paragraph to start notes
         // without waiting for a speaker change.
         if (stable.Count == 0) return;
         var words = stable.Sum(t => t.Text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length);
-        if (stable.Count - _submittedParagraphs < 3 && words - _submittedWords < 180) return;
-        if (words < 35) return;
+        var summarize = (stable.Count - _submittedParagraphs >= 3 || words - _submittedWords >= 180) && words>=35
+            && DateTime.UtcNow-_lastNotesRequest>=TimeSpan.FromSeconds(30);
+        var translate = _foreignSpeech && words-_submittedTranslationWords>=2 && DateTime.UtcNow-_lastTranslationRequest>=TimeSpan.FromSeconds(8);
+        if (!summarize && !translate) return;
         if (_liveNotes is null)
         {
             var generation = ++_notesGeneration;
             var meetingId = _recording!.Id;
             try
             {
-                _liveNotes = _worker.StartLiveNotes(new Progress<LiveNotesUpdate>(update => {
+                _liveNotes = _worker.StartLiveNotes(meetingId.ToString(),new Progress<LiveNotesUpdate>(update => {
                     if (generation != _notesGeneration || _recording?.Id != meetingId) return;
                     LiveNotesBusy = false;
                     if (update.Error.Length > 0)
                     {
                         StopLiveNotes(); _notesRetryAfter = DateTime.UtcNow.AddMinutes(1);
                         _submittedParagraphs = _submittedWords = 0;
+                        _submittedTranslationWords = 0;
                         LiveSummaryStatus = "Notes will retry; transcription continues. " + update.Error;
                         return;
                     }
                     LiveSummary = update.Summary; LiveKeyPoints = update.KeyPoints; LiveTranslations = update.Translations;
-                    LiveSummaryStatus = $"Rewritten through {TimeSpan.FromSeconds(update.ThroughSeconds):hh\\:mm\\:ss} · provisional, updated as context grows";
+                    LiveSummaryStatus = $"{update.RetainedPoints} retained context points · summary through {TimeSpan.FromSeconds(update.ThroughSeconds):hh\\:mm\\:ss}"
+                        + (update.TranslationOnly ? " · English translations updated" : " · new context added and duplicates fused")
+                        + (update.CacheHit ? " · reused cached context" : "");
                     try { _store.SaveRunningNotes(meetingId, update); }
                     catch (Exception error) when (error is IOException or UnauthorizedAccessException) { LiveSummaryStatus = "Could not save running notes: " + error.Message; }
                 }), new Progress<string>(message => {
@@ -366,9 +415,10 @@ public sealed class NoteTakerViewModel : ObservableObject, IDisposable
             }
         }
         if (_liveNotes is null) return;
-        _liveNotes.Submit(stable);
-        _submittedParagraphs = stable.Count; _submittedWords = words; _lastNotesRequest = DateTime.UtcNow;
-        LiveNotesBusy = true; LiveSummaryStatus = "Rewriting the summary with the latest context and checking foreign phrases…";
+        _liveNotes.Submit(stable,summarize);
+        if (summarize) { _submittedParagraphs = stable.Count; _submittedWords = words; _lastNotesRequest = DateTime.UtcNow; }
+        _submittedTranslationWords=words; _lastTranslationRequest=DateTime.UtcNow;
+        LiveNotesBusy = true; LiveSummaryStatus = summarize ? "Adding new material to retained context…" : "Translating foreign speech into English…";
     }
 
     private void StopLiveNotes()

@@ -37,6 +37,7 @@ public sealed class LocalNotesWorker : ILocalNotesWorker
                 using var config = JsonDocument.Parse(File.ReadAllText(Path.Combine(_home, "config.json")));
                 var root = config.RootElement;
                 return root.TryGetProperty("notesBackend", out var backend) && backend.GetString() == "qwen2.5-1m"
+                    && root.TryGetProperty("contextEngineVersion",out var contextVersion) && contextVersion.GetInt32()==1
                     && File.Exists(root.GetProperty("titleModel").GetString()) && File.Exists(root.GetProperty("titleCli").GetString())
                     && root.TryGetProperty("asrModel", out var asrModel) && asrModel.GetString() == "parakeet-ultra"
                     && root.TryGetProperty("parakeetUltraModel", out var asr) && File.Exists(asr.GetString())
@@ -47,14 +48,17 @@ public sealed class LocalNotesWorker : ILocalNotesWorker
         }
     }
 
-    public ILiveTranscript StartLive(IProgress<LiveTranscriptUpdate> preview, int speakers = 0)
+    public ILiveTranscript StartLive(IProgress<LiveTranscriptUpdate> preview, int speakers = 0, string sessionId = "")
     {
-        var live = new LiveTranscriptSession(Python, Path.Combine(_scripts, "worker.py"), _home, preview, speakers, start => _runtime?.Configure(start));
+        var live = new LiveTranscriptSession(Python, Path.Combine(_scripts, "worker.py"), _home, preview, speakers, start => _runtime?.Configure(start),sessionId);
         return live;
     }
 
-    public ILiveNotesSession StartLiveNotes(IProgress<LiveNotesUpdate> updates, IProgress<string> progress)
-        => new LiveNotesSession(Python, Path.Combine(_scripts, "worker.py"), _home, updates, progress);
+    public ILiveNotesSession StartLiveNotes(string sessionId, IProgress<LiveNotesUpdate> updates, IProgress<string> progress)
+        => new LiveNotesSession(Python, Path.Combine(_scripts, "worker.py"), _home, sessionId, updates, progress);
+
+    public Task IndexLibraryAsync(IProgress<string> progress) => RunAsync(Python,
+        [Path.Combine(_scripts,"worker.py"),"index-library","--home",_home,"--input",AppPaths.ActionItemsFile],progress,CancellationToken.None);
 
     public Task InstallAsync(IProgress<string> progress, CancellationToken ct) => InstallAsync(progress, ct, false);
     public async Task InstallAsync(IProgress<string> progress, CancellationToken ct, bool redownloadAsr)
@@ -64,8 +68,8 @@ public sealed class LocalNotesWorker : ILocalNotesWorker
         if (!ModelsInstalled) throw new InvalidOperationException("Local model setup did not finish.");
     }
 
-    public async Task<IReadOnlyList<TranscriptTurn>> TranscribeAsync(string audioPath, int speakers, IProgress<string> progress, CancellationToken ct)
-        => await ExecuteAsync<List<TranscriptTurn>>("transcribe", audioPath, speakers, progress, ct);
+    public async Task<IReadOnlyList<TranscriptTurn>> TranscribeAsync(string audioPath, int speakers, IProgress<string> progress, CancellationToken ct, string sessionId = "")
+        => await ExecuteAsync<List<TranscriptTurn>>("transcribe", audioPath, speakers, progress, ct, sessionId);
 
     public async Task<string> CreateTitleAsync(IReadOnlyList<TranscriptTurn> transcript, IProgress<string> progress, CancellationToken ct)
         => (await GenerateAsync<TranscriptTitle>("title", transcript, progress, ct)).Title;
@@ -88,14 +92,14 @@ public sealed class LocalNotesWorker : ILocalNotesWorker
         finally { if (File.Exists(input)) File.Delete(input); }
     }
 
-    private async Task<T> ExecuteAsync<T>(string command, string input, int speakers, IProgress<string> progress, CancellationToken ct)
+    private async Task<T> ExecuteAsync<T>(string command, string input, int speakers, IProgress<string> progress, CancellationToken ct, string sessionId = "")
     {
         if (!ModelsInstalled || (command == "transcribe" && !IsReady)) throw new InvalidOperationException("Set up and load local models first.");
         var output = Path.Combine(_home, Guid.NewGuid() + ".result.json");
         try
         {
             await RunAsync(Python, [Path.Combine(_scripts, "worker.py"), command, "--home", _home,
-                "--input", input, "--output", output, "--speakers", speakers.ToString()], progress, ct, useModels: command == "transcribe");
+                "--input", input, "--output", output, "--speakers", speakers.ToString(), "--session", sessionId], progress, ct, useModels: command == "transcribe");
             var result = JsonSerializer.Deserialize<T>(await File.ReadAllTextAsync(output, ct), Json);
             return result ?? throw new InvalidOperationException("The local model returned no result.");
         }

@@ -4,7 +4,7 @@
     xmlns:notes="using:OpenKrisp.Core.Notes"
     xmlns:local="using:OpenKrisp.App.Pages">
     <Grid Background="White" Padding="24,16,24,20" RowSpacing="14">
-        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
         <Grid ColumnSpacing="16">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel VerticalAlignment="Center" Spacing="4">
@@ -86,7 +86,15 @@
                 </StackPanel>
             </ScrollViewer>
         </Expander>
-        <Grid Grid.Row="4" RowSpacing="12" Visibility="{x:Bind local:NoteTakerPage.VisibleWhen(NotesVm.IsRecording), Mode=OneWay}">
+        <Border Grid.Row="4" Background="#F5F3FF" BorderBrush="#DDD6FE" BorderThickness="1" CornerRadius="10" Padding="16" Visibility="{x:Bind local:NoteTakerPage.VisibleWhen(NotesVm.IsBusy), Mode=OneWay}">
+            <StackPanel Spacing="8">
+                <TextBlock Text="{x:Bind NotesVm.ProgressCaption, Mode=OneWay}" FontWeight="SemiBold" FontSize="16"/>
+                <ProgressBar Minimum="0" Maximum="100" Value="{x:Bind NotesVm.ProcessingProgress, Mode=OneWay}" IsIndeterminate="{x:Bind NotesVm.ProcessingIndeterminate, Mode=OneWay}"/>
+                <TextBlock Text="{x:Bind NotesVm.ProgressDetail, Mode=OneWay}"/>
+                <TextBlock Text="{x:Bind NotesVm.StepsRemaining, Mode=OneWay}" TextWrapping="Wrap" Foreground="#64748B" FontSize="12"/>
+            </StackPanel>
+        </Border>
+        <Grid Grid.Row="5" RowSpacing="12" Visibility="{x:Bind local:NoteTakerPage.VisibleWhen(NotesVm.IsRecording), Mode=OneWay}">
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
             <Grid.ColumnDefinitions><ColumnDefinition Width="2.2*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="*" MinWidth="300" MaxWidth="440"/></Grid.ColumnDefinitions>
             <StackPanel Spacing="4">
@@ -107,13 +115,13 @@
                         <StackPanel Spacing="20" Padding="0,0,8,16">
                             <TextBlock Text="{x:Bind NotesVm.LiveSummary, Mode=OneWay}" TextWrapping="Wrap" IsTextSelectionEnabled="True" FontSize="17" LineHeight="28"/>
                             <ItemsControl ItemsSource="{x:Bind NotesVm.LiveKeyPoints, Mode=OneWay}"><ItemsControl.ItemTemplate><DataTemplate x:DataType="x:String"><Grid ColumnSpacing="10" Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="•" Foreground="#6750A4"/><TextBlock Grid.Column="1" Text="{x:Bind}" TextWrapping="Wrap" IsTextSelectionEnabled="True" FontSize="15" LineHeight="24"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-                            <TextBlock Text="Draft notes evolve as you speak. Highlighted foreign phrases have an English translation beside them. Original transcript wording is preserved." TextWrapping="Wrap" FontSize="12" Foreground="#64748B"/>
+                            <TextBlock Text="Context is retained, expanded and fused when points repeat. Foreign speech receives an English translation beside it. Original transcript wording is preserved." TextWrapping="Wrap" FontSize="12" Foreground="#64748B"/>
                         </StackPanel>
                     </ScrollViewer>
                 </Grid>
             </Border>
         </Grid>
-        <Grid Grid.Row="4" ColumnSpacing="24" Visibility="{x:Bind local:NoteTakerPage.HiddenWhen(NotesVm.IsRecording), Mode=OneWay}">
+        <Grid Grid.Row="5" ColumnSpacing="24" Visibility="{x:Bind local:NoteTakerPage.HiddenWhen(NotesVm.IsRecording), Mode=OneWay}">
             <Grid.ColumnDefinitions><ColumnDefinition Width="210"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
             <Grid RowSpacing="10">
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>

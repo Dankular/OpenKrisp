@@ -15,6 +15,11 @@ def progress(message):
     print(message, file=sys.stderr, flush=True)
 
 
+STEPS=['Reading audio','Identifying speakers','Detecting speech','Transcribing chunks','Indexing and saving transcript','Generating title']
+def step(index, done=0, total=0):
+    progress(json.dumps(dict(kind='progress',step=index,steps=len(STEPS),label=STEPS[index],done=done,total=total,remaining=STEPS[index+1:])))
+
+
 def decode_audio(path):
     import av
     import numpy as np
@@ -77,14 +82,18 @@ def decode_asr(audio):
     return model_request("infer",audio)
 
 
-def transcribe(config, audio_path, speakers=0):
+def transcribe(config, audio_path, speakers=0, home=None, scope=''):
+    step(0)
     progress("Reading audio...")
     audio = decode_audio(audio_path)
+    step(0,1,1)
     if len(audio) == 0:
         return []
     progress("Identifying speakers locally...")
+    step(1)
     diarizer = make_diarizer(config, speakers)
     segments = diarizer.process(audio).sort_by_start_time()
+    step(1,1,1)
     names = {}
     turns = []
     for segment in segments:
@@ -94,6 +103,8 @@ def transcribe(config, audio_path, speakers=0):
     gc.collect()
     progress("Detecting speech and semantic turn endings locally...")
     speech_spans, boundaries = [], []
+    detection_total=(len(audio)+31999)//32000
+    step(2,0,detection_total)
     for end in range(32000, len(audio)+32000, 32000):
         end=min(end,len(audio)); start=max(0,end-128000)
         detected=model_request("analyze",audio[start:end])
@@ -104,6 +115,7 @@ def transcribe(config, audio_path, speakers=0):
         if detected["segments"] and detected["turnComplete"]:
             boundary=start/16000+detected["segments"][-1]["end"]
             if not boundaries or boundary>boundaries[-1]+.1: boundaries.append(boundary)
+        step(2,min(detection_total,(end+31999)//32000),detection_total)
     gated=[]
     for turn in turns:
         for first,last in speech_spans:
@@ -112,10 +124,13 @@ def transcribe(config, audio_path, speakers=0):
     turns=gated
     transcript = []
     committed_end=-1.0
-    for end in list(range(320000,len(audio),288000))+[len(audio)]:
+    chunks=list(range(320000,len(audio),288000))+[len(audio)]
+    step(3,0,len(chunks))
+    for chunk_index,end in enumerate(chunks):
         end=min(end,len(audio)); at=max(0,end-320000)
         progress(f"Transcribing with Parakeet Ultra on native CUDA: {end / len(audio):.0%}")
         if not any(t["end"]>at/16000 and t["start"]<end/16000 for t in turns):
+            step(3,chunk_index+1,len(chunks))
             if end==len(audio): break
             continue
         data=decode_asr(audio[at:end])
@@ -124,8 +139,15 @@ def transcribe(config, audio_path, speakers=0):
         settled=[w for w in fresh if end==len(audio) or w["end"]<=end/16000-1]
         transcript.extend(settled)
         if settled: committed_end=settled[-1]["end"]
+        step(3,chunk_index+1,len(chunks))
         if end==len(audio): break
-    return compact_words(mark_paragraphs(transcript,boundaries))
+    result=compact_words(mark_paragraphs(transcript,boundaries))
+    step(4)
+    if home and scope:
+        from context_engine import ContextEngine
+        ContextEngine(home).ingest(scope,result,authoritative=True)
+    step(4,1,1)
+    return result
 
 
 # Titles remain independent of the detailed notes model.
@@ -134,7 +156,16 @@ from note_models import chunk_lines
 
 def summarize(config, home, turns):
     from qwen_notes import summarize_notes
-    return summarize_notes(config, home, turns, progress)
+    from context_engine import ContextEngine, digest, model_identity
+    engine=ContextEngine(home)
+    key=digest((model_identity(config),Path(__file__).with_name('qwen_notes.py').read_text(encoding='utf-8'),turns))
+    cached=engine.get('full-summary',key)
+    if cached is not None:
+        progress('Using cached complete notes for the unchanged transcript.')
+        return cached
+    result=summarize_notes(config, home, turns, progress)
+    engine.put('full-summary',key,result)
+    return result
 
 
 class SpeakerTracker:
@@ -188,8 +219,11 @@ def compact_words(words):
     return rows
 
 
-def live(config, expected_speakers=0):
+def live(config, expected_speakers=0, home=None, scope=''):
     import numpy as np
+    from context_engine import ContextEngine
+    from language_id import foreign_language
+    engine=ContextEngine(home,timeout=.1) if home and scope else None
     packets = queue.Queue(maxsize=1)
     latest = [0.0]
     def exact(size):
@@ -231,7 +265,9 @@ def live(config, expected_speakers=0):
         packet = packets.get()
         if packet is None:
             if pending:
-                print(json.dumps(dict(turns=compact_words(mark_paragraphs(stable + pending, boundaries)), audioEnd=expected_end, processingSeconds=0, skippedSeconds=skipped)), flush=True)
+                final=compact_words(mark_paragraphs(stable+pending,boundaries))
+                if engine: engine.ingest(scope,final)
+                print(json.dumps(dict(turns=final, audioEnd=expected_end, processingSeconds=0, skippedSeconds=skipped)), flush=True)
             return
         offset, new_audio = packet
         if offset - expected_end > 0.1:
@@ -269,41 +305,72 @@ def live(config, expected_speakers=0):
         if segments and detection["turnComplete"]:
             boundary = window_start + segments[-1]["end"]
             if not boundaries or boundary > boundaries[-1] + .1: boundaries.append(boundary)
+        confirmed=compact_words(mark_paragraphs(stable,boundaries))
+        rag_error=''
+        if engine:
+            try: engine.ingest(scope,confirmed)
+            except Exception as error: rag_error='Context indexing will retry: '+str(error)
+        language=foreign_language(' '.join(w['text'] for w in settled)) if settled else ''
         print(json.dumps(dict(turns=compact_words(mark_paragraphs(stable + pending, boundaries)), audioEnd=end,
             processingSeconds=time.monotonic()-started, skippedSeconds=skipped,
             speechDetected=detection.get("speechDetected", False), speechProbability=detection["speechProbability"],
-            turnProbability=detection["turnProbability"], turnComplete=detection["turnComplete"], turnBoundaries=boundaries), ensure_ascii=False), flush=True)
+            turnProbability=detection["turnProbability"], turnComplete=detection["turnComplete"], turnBoundaries=boundaries,
+            foreignLanguage=language,ragStatus=rag_error or ('Indexed directly into local context' if engine else '')), ensure_ascii=False), flush=True)
 
 
 def create_title(config, home, turns):
     from note_models import SupraTitle
     progress("Generating a title with Supra 50M locally...")
-    return {"title": SupraTitle(config, home).transcript_title(turns)}
+    step(5)
+    result={"title": SupraTitle(config, home).transcript_title(turns)}
+    step(5,1,1)
+    return result
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["transcribe", "summarize", "live", "live-notes", "title"])
+    parser.add_argument("command", choices=["transcribe", "summarize", "live", "live-notes", "title", "context-search", "index-library"])
     parser.add_argument("--home", required=True)
     parser.add_argument("--input")
     parser.add_argument("--output")
     parser.add_argument("--speakers", type=int, default=0)
+    parser.add_argument("--session", default='')
+    parser.add_argument("--query", default='')
     parser.add_argument("--config", default="config.json")
     args = parser.parse_args()
     home = Path(args.home).resolve()
     os.environ.update(HF_HOME=str(home / "cache"), HF_HUB_OFFLINE="1", NEEDLE_TELEMETRY="0", DO_NOT_TRACK="1", HF_HUB_DISABLE_TELEMETRY="1")
     config = json.loads((home / args.config).read_text(encoding="utf-8-sig"))
     if args.command == "live":
-        live(config, args.speakers)
+        live(config, args.speakers,home,args.session)
         return
     if args.command == "live-notes":
         from live_notes import serve
-        serve(config, home, progress)
+        serve(config, home, progress,args.session or 'manual')
+        return
+    if args.command == 'context-search':
+        from context_engine import ContextEngine
+        print(json.dumps(ContextEngine(home).search(args.session,args.query),ensure_ascii=False))
+        return
+    if args.command == 'index-library':
+        from context_engine import ContextEngine
+        engine=ContextEngine(home)
+        library=json.loads(Path(args.input).read_text(encoding='utf-8-sig'))
+        meetings=library.get('meetings',library.get('Meetings',[]))
+        for meeting in meetings:
+            scope=meeting.get('id',meeting.get('Id'))
+            turns=meeting.get('transcript',meeting.get('Transcript',[]))
+            if not turns: continue
+            rows=[{k[0].lower()+k[1:]:v for k,v in turn.items()} for turn in turns]
+            engine.ingest(str(scope),rows,authoritative=True)
+            annotations=meeting.get('translations',meeting.get('Translations',[]))
+            engine.translations(str(scope),[{k[0].lower()+k[1:]:v for k,v in a.items()} for a in annotations])
+        progress('Local RAG library index is up to date.')
         return
     if not args.input or not args.output:
         parser.error("--input and --output are required")
     if args.command == "transcribe":
-        result = transcribe(config, args.input, args.speakers)
+        result = transcribe(config, args.input, args.speakers,home,args.session)
     else:
         turns = json.loads(Path(args.input).read_text(encoding="utf-8-sig"))
         result = create_title(config, home, turns) if args.command == "title" else summarize(config, home, turns)

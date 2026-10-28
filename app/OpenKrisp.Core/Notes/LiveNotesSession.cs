@@ -10,24 +10,34 @@ internal sealed class LiveNotesSession : ILiveNotesSession
 {
     private readonly Process _process;
     private readonly CancellationTokenSource _stop = new();
-    private readonly Channel<IReadOnlyList<TranscriptTurn>> _requests = Channel.CreateBounded<IReadOnlyList<TranscriptTurn>>(
-        new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true });
+    private sealed record Request(IReadOnlyList<TranscriptTurn> Turns, bool Summarize);
+    private readonly object _gate = new();
+    private readonly Channel<Request> _requests = Channel.CreateBounded<Request>(
+        new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropOldest });
     private bool _disposed;
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    public LiveNotesSession(string python, string script, string home, IProgress<LiveNotesUpdate> updates, IProgress<string> progress)
+    public LiveNotesSession(string python, string script, string home, string sessionId, IProgress<LiveNotesUpdate> updates, IProgress<string> progress)
     {
         var start = new ProcessStartInfo(python) { UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
             StandardInputEncoding = new UTF8Encoding(false), StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
         foreach (var argument in new[] { script, "live-notes", "--home", home }) start.ArgumentList.Add(argument);
+        start.ArgumentList.Add("--session"); start.ArgumentList.Add(sessionId);
         start.Environment["PYTHONUTF8"] = "1";
         start.Environment["HF_HUB_OFFLINE"] = "1";
         _process = Process.Start(start) ?? throw new IOException("Could not start local running notes.");
         _ = RunAsync(updates, progress);
     }
 
-    public void Submit(IReadOnlyList<TranscriptTurn> turns) => _requests.Writer.TryWrite(turns);
+    public void Submit(IReadOnlyList<TranscriptTurn> turns, bool summarize = true)
+    {
+        lock (_gate)
+        {
+            if (_requests.Reader.TryRead(out var pending)) summarize |= pending.Summarize;
+            _requests.Writer.TryWrite(new Request(turns, summarize));
+        }
+    }
 
     private async Task RunAsync(IProgress<LiveNotesUpdate> updates, IProgress<string> progress)
     {
@@ -39,15 +49,16 @@ internal sealed class LiveNotesSession : ILiveNotesSession
                 tail.Enqueue(line); if (tail.Count > 5) tail.Dequeue();
                 if (!_disposed) progress.Report(line.StartsWith("Loading Qwen", StringComparison.Ordinal) ? "Preparing local running notes…"
                     : line.StartsWith("Qwen ready", StringComparison.Ordinal) ? "Reading recent paragraphs…"
-                    : line.StartsWith("Rewriting running", StringComparison.Ordinal) ? "Updating the summary and inline translations…" : line);
+                    : line.StartsWith("Adding context", StringComparison.Ordinal) ? "Adding new context and merging repeated points…"
+                    : line.StartsWith("Translating the latest", StringComparison.Ordinal) ? "Adding English translations beside the original speech…" : line);
             }
         }
         var errors = ReadProgressAsync();
         try
         {
-            await foreach (var turns in _requests.Reader.ReadAllAsync(_stop.Token))
+            await foreach (var request in _requests.Reader.ReadAllAsync(_stop.Token))
             {
-                await _process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(new { turns }, Json));
+                await _process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(request, Json));
                 await _process.StandardInput.FlushAsync(_stop.Token);
                 var line = await _process.StandardOutput.ReadLineAsync(_stop.Token);
                 if (line is null) { await errors; throw new IOException("Running notes stopped. " + string.Join(" ", tail)); }

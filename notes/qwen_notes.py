@@ -14,6 +14,8 @@ import time
 import urllib.request
 import urllib.error
 import uuid
+from functools import lru_cache
+from context_engine import ContextEngine, digest, model_identity
 
 
 def obj(properties):
@@ -74,6 +76,8 @@ class QwenNotes:
         self.keyfile=self.home/('qwen-'+identity+'.key')
         self.logfile=self.home/('qwen-'+identity+'.log')
         self.log=None
+        self.cache=ContextEngine(home)
+        self.identity=model_identity(config)
 
     def __enter__(self):
         try:
@@ -124,6 +128,7 @@ class QwenNotes:
             headers={'Authorization':'Bearer '+self.key,'Content-Type':'application/json'})
         with self.opener.open(request,timeout=timeout) as response: return json.load(response)
 
+    @lru_cache(maxsize=2048)
     def token_count(self,text):
         return len(self.request('/tokenize',{'content':text,'add_special':False})['tokens'])
 
@@ -151,12 +156,20 @@ class QwenNotes:
         return groups,budget
 
     def generate(self,data,label,maximum=6144,*,schema=None,system=SYSTEM):
+        cache_scope=self.config.get('notesScope','qwen-response')
+        cache_key=digest(dict(model=self.identity,system=system,schema=schema or SCHEMA,data=data,maximum=maximum,
+                              context=self.context,temperature=.2,seed=42))
+        cached=self.cache.get(cache_scope,cache_key)
+        if cached is not None:
+            self.progress('Using a cached response for unchanged context.')
+            return cached
         payload={'messages':[{'role':'system','content':system},{'role':'user','content':json.dumps(data,ensure_ascii=False)}],
                  'temperature':.2,'top_p':.9,'repeat_penalty':1.05,'max_tokens':maximum,'seed':42,'stream':True,
-                 'response_format':{'type':'json_object','schema':schema or SCHEMA}}
+                 'response_format':{'type':'json_object','schema':schema or SCHEMA},'cache_prompt':True}
         request=urllib.request.Request(self.url+'/v1/chat/completions',data=json.dumps(payload,ensure_ascii=False).encode(),
             headers={'Authorization':'Bearer '+self.key,'Content-Type':'application/json'})
         self.progress(label)
+        self.cache.generated()
         pieces=[]; reported=time.monotonic(); finish=None
         with self.opener.open(request,timeout=1200) as response:
             for line in response:
@@ -173,10 +186,13 @@ class QwenNotes:
                     self.progress(label+f' · drafting {sum(map(len,pieces)):,} characters'); reported=time.monotonic()
         if finish=='length': raise RuntimeError('Qwen reached its output limit; the original transcript and previous notes are preserved.')
         result=json.loads(''.join(pieces))
-        if schema is not None: return result
+        if schema is not None:
+            self.cache.put(cache_scope,cache_key,result)
+            return result
         paragraphs=result.get('summary',{})
         result['summary']='\n\n'.join(paragraphs.get(key,'').strip() for key in ('contextAndPurpose','discussionAndReasoning','outcomeAndImplications') if paragraphs.get(key,'').strip())
         if not result['summary']: raise RuntimeError('Qwen returned an empty summary.')
+        self.cache.put(cache_scope,cache_key,result)
         return result
 
     def review_actions(self,items,turns,budget):

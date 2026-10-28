@@ -114,7 +114,7 @@ def main():
                 if name in required or (name.startswith("ggml-cpu-") and name.endswith(".dll")) or name.startswith("LICENSE"):
                     (binary_dir / name).write_bytes(archive.read(member))
         archive_path.unlink()
-    config = {"notesBackend": "qwen2.5-1m", "asrBackend": "native-cuda", "asrModel": "parakeet-ultra", "python": str(python),
+    config = {"notesBackend": "qwen2.5-1m", "contextEngineVersion": 1, "asrBackend": "native-cuda", "asrModel": "parakeet-ultra", "python": str(python),
               "parakeetUltraModel": str(asr_dir/ULTRA_FILE), "smartTurnDirectory": str(turn_dir),
               "segmentation": str(model_dir / "segmentation.onnx"), "embedding": str(model_dir / "embedding.onnx"),
               "titleModel": str(title_model), "titleCli": str(binary_dir / "llama-completion.exe"),

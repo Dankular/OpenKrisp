@@ -17,6 +17,8 @@ public sealed record LiveTranscriptUpdate(IReadOnlyList<TranscriptTurn> Turns, d
     public double TurnProbability { get; init; }
     public bool TurnComplete { get; init; }
     public IReadOnlyList<double> TurnBoundaries { get; init; } = Array.Empty<double>();
+    public string ForeignLanguage { get; init; } = "";
+    public string RagStatus { get; init; } = "";
 }
 
 public sealed record NoteTopic(string Title, IReadOnlyList<string> Points);
@@ -24,10 +26,14 @@ public sealed record TranscriptTranslation(double Start, double End, string Text
 public sealed record LiveNotesUpdate(string Summary, IReadOnlyList<string> KeyPoints, IReadOnlyList<TranscriptTranslation> Translations, double ThroughSeconds)
 {
     public string Error { get; init; } = "";
+    public bool TranslationOnly { get; init; }
+    public double TranslationThrough { get; init; }
+    public int RetainedPoints { get; init; }
+    public bool CacheHit { get; init; }
 }
 public interface ILiveNotesSession : IDisposable
 {
-    void Submit(IReadOnlyList<TranscriptTurn> turns);
+    void Submit(IReadOnlyList<TranscriptTurn> turns, bool summarize = true);
 }
 
 public sealed record GeneratedAction(string Text, string Assignee, string Due, string Evidence)
@@ -58,11 +64,11 @@ public interface ILocalNotesWorker
     bool IsReady { get; }
     bool IsPreparing => false;
     string RuntimeStatus => "";
-    ILiveTranscript? StartLive(IProgress<LiveTranscriptUpdate> preview, int speakers = 0) => null;
-    ILiveNotesSession? StartLiveNotes(IProgress<LiveNotesUpdate> updates, IProgress<string> progress) => null;
+    ILiveTranscript? StartLive(IProgress<LiveTranscriptUpdate> preview, int speakers = 0, string sessionId = "") => null;
+    ILiveNotesSession? StartLiveNotes(string sessionId, IProgress<LiveNotesUpdate> updates, IProgress<string> progress) => null;
     Task<string> CreateTitleAsync(IReadOnlyList<TranscriptTurn> transcript, IProgress<string> progress, CancellationToken ct) => Task.FromResult("");
     Task InstallAsync(IProgress<string> progress, CancellationToken ct);
-    Task<IReadOnlyList<TranscriptTurn>> TranscribeAsync(string audioPath, int speakers, IProgress<string> progress, CancellationToken ct);
+    Task<IReadOnlyList<TranscriptTurn>> TranscribeAsync(string audioPath, int speakers, IProgress<string> progress, CancellationToken ct, string sessionId = "");
     Task<MeetingSummary> SummarizeAsync(IReadOnlyList<TranscriptTurn> transcript, IProgress<string> progress, CancellationToken ct);
 }
 

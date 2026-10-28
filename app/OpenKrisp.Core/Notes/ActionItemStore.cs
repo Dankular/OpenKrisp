@@ -39,10 +39,10 @@ public sealed class ActionItemStore
     public IReadOnlyList<Meeting> Meetings { get { lock (_gate) return _data.Meetings.ToList(); } }
     public IReadOnlyList<ActionItem> Items { get { lock (_gate) return _data.Items.ToList(); } }
 
-    public Meeting AddMeeting(string title, DateTimeOffset? startedAt = null)
+    public Meeting AddMeeting(string title, DateTimeOffset? startedAt = null, Guid? id = null)
     {
         if (string.IsNullOrWhiteSpace(title)) throw new ArgumentException("A meeting needs a title.", nameof(title));
-        var m = new Meeting { Title = title.Trim(), StartedAt = startedAt ?? DateTimeOffset.Now };
+        var m = new Meeting { Id = id ?? Guid.NewGuid(), Title = title.Trim(), StartedAt = startedAt ?? DateTimeOffset.Now };
         Mutate(() => _data.Meetings.Add(m));
         return m;
     }

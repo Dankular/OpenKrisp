@@ -3,3 +3,4 @@ sherpa-onnx==2.0.1
 numpy==2.5.4
 av==19.0.2
 huggingface-hub==2.3.0
+langid==1.1.6

@@ -28,6 +28,22 @@ public sealed class TractRuntimeService : ObservableObject, IDisposable
     public string NotesBackend => "Qwen2.5-7B-Instruct-1M Q4_K_M: live notes and inline translations share GPU memory with ASR using a 4K working context. Full summaries use 16K section processing and temporarily release ASR memory. Inference stays local.";
     public string ModelDirectory => Path.Combine(_worker.Home, "models");
     public string DownloadStatus => Directory.Exists(ModelDirectory) ? "Model files: " + ModelDirectory : "Models will download automatically";
+    public string ContextStatus
+    {
+        get
+        {
+            try
+            {
+                using var data=JsonDocument.Parse(File.ReadAllText(Path.Combine(_worker.Home,"context-status.json")));
+                var root=data.RootElement;
+                int Number(string name) => root.TryGetProperty(name,out var value) ? value.GetInt32() : 0;
+                return $"Local RAG: {Number("indexedParagraphs")} indexed paragraphs · {Number("cachedResponses")} cached responses · {Number("cacheHits")} cache hits · {Number("modelCalls")} model calls. SQLite FTS retrieval; no external server.";
+            }
+            catch (Exception error) when (error is IOException or JsonException or UnauthorizedAccessException)
+            { return "Local RAG and context cache initialize with the next recording. Confirmed speech is indexed before summarization."; }
+        }
+    }
+    public void RefreshContext() => OnPropertyChanged(nameof(ContextStatus));
 
     public TractRuntimeService(LocalNotesWorker worker, Func<bool> inUse)
     {
@@ -48,6 +64,8 @@ public sealed class TractRuntimeService : ObservableObject, IDisposable
         if (!_worker.ModelsInstalled) { State = "downloading"; await _worker.InstallAsync(_messages, CancellationToken.None); }
         if (_process is not null && !_process.HasExited) { if (!IsLoaded) await CommandAsync("load"); }
         else await StartHostAsync();
+        try { await _worker.IndexLibraryAsync(_messages); }
+        catch (Exception error) { Message = "ASR loaded; local context indexing will retry: " + error.Message; }
     });
     public Task LoadAsync() => RunAsync(async () => {
         if (_process is null || _process.HasExited) await StartHostAsync();

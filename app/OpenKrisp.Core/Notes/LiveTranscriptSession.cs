@@ -17,12 +17,13 @@ internal sealed class LiveTranscriptSession : ILiveTranscript
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private sealed record PcmPacket(double Start, float[] Samples);
 
-    public LiveTranscriptSession(string python, string script, string home, IProgress<LiveTranscriptUpdate> preview, int speakers, Action<ProcessStartInfo>? configure = null)
+    public LiveTranscriptSession(string python, string script, string home, IProgress<LiveTranscriptUpdate> preview, int speakers, Action<ProcessStartInfo>? configure = null, string sessionId = "")
     {
         var start = new ProcessStartInfo(python) { UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
             StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
         foreach (var arg in new[] { script, "live", "--home", home, "--speakers", speakers.ToString() }) start.ArgumentList.Add(arg);
+        start.ArgumentList.Add("--session"); start.ArgumentList.Add(sessionId);
         start.Environment["PYTHONUTF8"] = "1";
         configure?.Invoke(start);
         _process = Process.Start(start) ?? throw new IOException("Could not start Parakeet Ultra live preview.");
