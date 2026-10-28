@@ -19,7 +19,7 @@ internal sealed class LiveNotesSession : ILiveNotesSession
     {
         var start = new ProcessStartInfo(python) { UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
-            StandardInputEncoding = Encoding.UTF8, StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
+            StandardInputEncoding = new UTF8Encoding(false), StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
         foreach (var argument in new[] { script, "live-notes", "--home", home }) start.ArgumentList.Add(argument);
         start.Environment["PYTHONUTF8"] = "1";
         start.Environment["HF_HUB_OFFLINE"] = "1";

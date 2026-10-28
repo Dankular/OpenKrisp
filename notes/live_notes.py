@@ -35,7 +35,7 @@ def serve(config, home, progress):
     annotations = []
     with QwenNotes(config, home, progress) as model:
         for line in sys.stdin:
-            request = json.loads(line)
+            request = json.loads(line.lstrip('\ufeff'))
             turns = request['turns']
             sources = []
             for index, turn in enumerate(turns):
