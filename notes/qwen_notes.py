@@ -65,6 +65,10 @@ REVIEW_SCHEMA=obj({'results':{'type':'array','items':obj({'id':{'type':'integer'
     'classification':{'type':'string','enum':['assigned_work','personal_commitment','requested_follow_up','not_an_action']},'reason':TEXT})}})
 
 
+class OutputLimitError(RuntimeError):
+    """A complete, validated response was not produced; never use partial JSON."""
+
+
 class QwenNotes:
     def __init__(self,config,home,progress):
         self.config,self.home,self.progress=config,Path(home),progress
@@ -155,7 +159,7 @@ class QwenNotes:
         if current: groups.append(current)
         return groups,budget
 
-    def generate(self,data,label,maximum=6144,*,schema=None,system=SYSTEM):
+    def generate(self,data,label,maximum=6144,*,schema=None,system=SYSTEM,_retry=False):
         cache_scope=self.config.get('notesScope','qwen-response')
         cache_key=digest(dict(model=self.identity,system=system,schema=schema or SCHEMA,data=data,maximum=maximum,
                               context=self.context,temperature=.2,seed=42))
@@ -184,7 +188,13 @@ class QwenNotes:
                     if choice.get('finish_reason'): finish=choice['finish_reason']
                 if time.monotonic()-reported>2:
                     self.progress(label+f' · drafting {sum(map(len,pieces)):,} characters'); reported=time.monotonic()
-        if finish=='length': raise RuntimeError('Qwen reached its output limit; the original transcript and previous notes are preserved.')
+        if finish=='length':
+            if not _retry:
+                self.progress('Draft exceeded the output budget; retrying with a more concise response.')
+                result=self.generate(data,label,maximum,schema=schema,system=system+"\nOUTPUT BUDGET: Return compact JSON. Avoid repetition and unnecessary whitespace. Keep each explanatory paragraph to two concise sentences. Preserve distinct facts, numbers, qualifications and source references. Do not repeat the original transcript in notes. Finish the entire JSON object within the output budget.",_retry=True)
+                self.cache.put(cache_scope,cache_key,result)
+                return result
+            raise OutputLimitError('This notes batch needs to be split into smaller sections; completed notes are saved.')
         result=json.loads(''.join(pieces))
         if schema is not None:
             self.cache.put(cache_scope,cache_key,result)
@@ -213,10 +223,18 @@ class QwenNotes:
                 groups.append(current);current=[]
             current.append(public)
         if current: groups.append(current)
-        for i,group in enumerate(groups):
-            reviewed=self.generate({'candidates':group},f'Qwen · verifying action commitments {i+1}/{len(groups)}',maximum=2048,schema=REVIEW_SCHEMA,system=REVIEW_SYSTEM)
+        def review(group):
+            try:
+                return self.generate({'candidates':group},'Qwen · verifying action commitments',maximum=2048,schema=REVIEW_SCHEMA,system=REVIEW_SYSTEM)['results']
+            except OutputLimitError:
+                if len(group)<=1: raise
+                half=len(group)//2
+                self.progress('Reviewing action commitments in smaller batches.')
+                return review(group[:half])+review(group[half:])
+        for group in groups:
+            reviewed=review(group)
             ids={c['id'] for c in group}
-            for decision in reviewed.get('results',[]):
+            for decision in reviewed:
                 index=decision.get('id')
                 if index in ids and decision.get('classification') in ('assigned_work','personal_commitment','requested_follow_up'):
                     item=candidates[index]['item']
@@ -264,9 +282,42 @@ def summarize_notes(config,home,turns,progress):
     if not turns: raise ValueError('This transcript has no speech to summarize.')
     with QwenNotes(config,home,progress) as model:
         chunks,budget=model.chunks(turns)
-        parts=[model.generate({'task':'Write detailed notes for this transcript section.','section':i+1,'sections':len(chunks),'transcript':chunk},
-            f'Qwen · reading and writing section {i+1}/{len(chunks)}') for i,chunk in enumerate(chunks)]
+        def read_section(chunk,depth=0):
+            try:
+                return [model.generate({'task':'Write detailed notes for this transcript section.','transcript':chunk},
+                    'Qwen · reading and writing transcript notes')]
+            except OutputLimitError:
+                if depth>=10: raise
+                progress('Splitting a detailed-notes section to fit the output budget.')
+                if len(chunk)>1:
+                    half=len(chunk)//2; groups=[chunk[:half],chunk[half:]]
+                else:
+                    item=chunk[0]; text=item['text']; cut=text.rfind(' ',0,len(text)//2)
+                    if cut<=0: cut=len(text)//2
+                    if cut<=0: raise
+                    groups=[[{**item,'text':text[:cut]}],[{**item,'text':text[cut:]}]]
+                return [part for group in groups for part in read_section(group,depth+1)]
+        parts=[part for chunk in chunks for part in read_section(chunk)]
         originals=list(parts)
+        def retain(group):
+            # If synthesis cannot fit, preserve complete section notes instead of truncating them.
+            result={'summary':'\n\n'.join(p['summary'] for p in group)}
+            for field in ('keyPoints','topics','decisions','actionItems','openQuestions','risks'):
+                result[field]=[]
+                for part in group:
+                    for item in part.get(field,[]):
+                        if item not in result[field]: result[field].append(item)
+            return result
+        def synthesize(group,label,maximum=6144):
+            payload={'task':'Synthesize these section notes into a coherent detailed summary. Preserve supported facts, qualifications, reasoning, commitments and verbatim evidence. Detailed source notes are retained separately.','sectionNotes':group}
+            if model.token_count(json.dumps(payload,ensure_ascii=False))>budget:
+                progress('Keeping complete section notes because this synthesis exceeds the working context.')
+                return retain(group)
+            try:
+                return model.generate(payload,label,maximum=maximum)
+            except OutputLimitError:
+                progress('Keeping complete section notes because synthesis exceeded the output budget.')
+                return retain(group)
         while len(parts)>1:
             groups=[]; current=[]
             for part in parts:
@@ -277,11 +328,9 @@ def summarize_notes(config,home,turns,progress):
             if len(groups)>=len(parts):
                 # Keep all detailed section notes; reduce only their overview for a readable top-level summary.
                 views=[{'summary':p['summary'],'keyPoints':p['keyPoints'],'actionItems':[],'decisions':[],'topics':[],'openQuestions':p['openQuestions'],'risks':p['risks']} for p in parts]
-                compact=[model.generate({'task':'Create a compact but substantive overview of these notes for cross-section synthesis. Detailed topic notes and grounded action evidence are retained separately.','sectionNotes':view},
-                    f'Qwen · preparing synthesis {i+1}/{len(views)}',maximum=min(3072,budget//2-512)) for i,view in enumerate(views)]
+                compact=[synthesize([view],f'Qwen · preparing synthesis {i+1}/{len(views)}',maximum=min(3072,budget//2-512)) for i,view in enumerate(views)]
                 groups=[compact[i:i+2] for i in range(0,len(compact),2)]
-            parts=[model.generate({'task':'Synthesize these section notes into a coherent detailed summary. Preserve all supported commitments, decisions, owners, deadlines, unanswered questions and important reasoning. Evidence must remain verbatim.','sectionNotes':group},
-                f'Qwen · consolidating notes {i+1}/{len(groups)}') if len(group)>1 else group[0] for i,group in enumerate(groups)]
+            parts=[synthesize(group,f'Qwen · consolidating notes {i+1}/{len(groups)}') if len(group)>1 else group[0] for i,group in enumerate(groups)]
         result=parts[0]
         # Retain detailed topic notes and grounded tasks from every section, not just the reduced overview.
         topics={}

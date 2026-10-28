@@ -5,7 +5,7 @@ import re
 import sys
 from context_engine import ContextEngine, digest, model_identity, normalized
 from language_id import foreign_language
-from qwen_notes import QwenNotes, obj, TEXT, evidence_location
+from qwen_notes import QwenNotes, OutputLimitError, obj, TEXT, evidence_location
 
 TRANSLATION = obj({'sourceId': {'type':'integer'}, 'originalText':TEXT, 'englishTranslation':TEXT, 'sourceLanguage':TEXT})
 TRANSLATIONS = {'type':'array','items':TRANSLATION}
@@ -62,7 +62,16 @@ def compact(model,state,progress):
     budget=model.context-1400-model.token_count(FUSE_SYSTEM)-256
     while len(selected)>2 and model.token_count(json.dumps(payload(),ensure_ascii=False))>budget: selected.pop()
     if len(selected)<2 or model.token_count(json.dumps(payload(),ensure_ascii=False))>budget: return
-    result=model.generate(payload(),'Fusing repeated context while preserving distinct details…',maximum=1400,schema=FUSE_SCHEMA,system=FUSE_SYSTEM)
+    while True:
+        try:
+            result=model.generate(payload(),'Fusing repeated context while preserving distinct details…',maximum=1400,schema=FUSE_SCHEMA,system=FUSE_SYSTEM)
+            break
+        except OutputLimitError:
+            if len(selected)<=2:
+                progress('Keeping all existing notes; consolidation will resume with later context.')
+                return
+            selected=selected[:max(2,len(selected)//2)]
+            progress('Consolidating a smaller group of notes.')
     used=set(); allowed={p['id']:p for p in selected}
     for group in result['groups']:
         ids=set(group['ids'])
@@ -185,7 +194,27 @@ def serve(config, home, progress, scope):
                 if point['status']=='active' and not any(evidence_location(e['quote'],turns) for e in point['evidence']): point['status']='source-revised'
             if model is None: model=stack.enter_context(QwenNotes(config,home,progress))
             pending=[]
-            def process(batch):
+            def process(batch,depth=0):
+                batch_key=digest((summarize,batch,[turns[s['sourceId']] for s in batch]))
+                if batch_key in state.get('completedBatches',[]): return
+                try:
+                    generate_batch(batch)
+                except OutputLimitError:
+                    if depth>=10:
+                        raise OutputLimitError('A short notes passage still exceeds the output budget. Completed batches are saved; the original transcript is intact.')
+                    if len(batch)>1:
+                        half=len(batch)//2; groups=[batch[:half],batch[half:]]
+                    else:
+                        item=batch[0]; text=item['text']; cut=text.rfind(' ',0,len(text)//2)
+                        if cut<=0: cut=len(text)//2
+                        if cut<=0: raise
+                        groups=[[{**item,'text':text[:cut]}],[{**item,'text':text[cut:]}]]
+                    progress('Splitting the notes batch; continuing from saved context.')
+                    for group in groups: process(group,depth+1)
+                state.setdefault('completedBatches',[]).append(batch_key)
+                engine.save(scope,version,state)
+
+            def generate_batch(batch):
                 if summarize:
                     selected=candidates(state['memory'],' '.join(s['text'] for s in batch))
                     recalled=engine.search(scope,' '.join(s['text'] for s in batch),before=min(turns[s['sourceId']]['start'] for s in batch),limit=2)
@@ -223,6 +252,7 @@ def serve(config, home, progress, scope):
                 state['summaryProcessed']=processed
                 state['summaryThrough']=max((t['end'] for t in turns),default=0)
             state['translationProcessed']=processed
+            state.pop('completedBatches',None)
             engine.translations(scope,state['annotations'])
             engine.save(scope,version,state)
             engine.put('live-snapshot:'+scope,source_key,state)
