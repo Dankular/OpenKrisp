@@ -1,10 +1,13 @@
 """RAG manages source coverage and retained notes; Qwen only writes grounded notes."""
 from contextlib import ExitStack
+from copy import deepcopy
 import json
 import sys
 from context_engine import ContextEngine, NoteEvidenceError, digest, model_identity
 from language_id import foreign_language
 from qwen_notes import QwenNotes, OutputLimitError, obj, TEXT, evidence_location
+from semantic_encoder import SemanticEncoder
+from semantic_context import SemanticContext
 
 TRANSLATION = obj({'sourceId': {'type':'integer'}, 'originalText':TEXT, 'englishTranslation':TEXT, 'sourceLanguage':TEXT})
 TRANSLATIONS = {'type':'array','items':TRANSLATION}
@@ -93,10 +96,11 @@ def serve(config, home, progress, scope):
     state=state or dict(annotations=(legacy or {}).get('annotations',[]),
                        translationProcessed=(legacy or {}).get('translationProcessed',{}),
                        summaryThrough=(legacy or {}).get('summaryThrough',0))
+    state['notesWriter']=version
     config={**config,'notesContext':4096,'notesFitTarget':1024,'notesBatch':128,'notesMicroBatch':32,
             'notesThreads':2,'liveNotes':True,'notesScope':'live:'+scope}
     with ExitStack() as stack:
-        model=None
+        model=None; semantic=None
         for line in sys.stdin:
             request=json.loads(line.lstrip('\ufeff')); turns=request['turns']; summarize=request.get('summarize',True)
             engine.ingest(scope,turns)
@@ -112,6 +116,12 @@ def serve(config, home, progress, scope):
                 engine.save(scope,version,state)
                 progress('RAG source coverage is current; no notes model call needed.')
                 emit(engine,scope,version,state,turns,not summarize,True); continue
+            if summarize:
+                if semantic is None:
+                    progress('Loading local semantic sentence retrieval on Tract…')
+                    encoder=stack.enter_context(SemanticEncoder(config,home))
+                    semantic=SemanticContext(engine,encoder,progress)
+                semantic.sync(scope,version)
             if model is None: model=stack.enter_context(QwenNotes(config,home,progress))
 
             def process(batch,depth=0):
@@ -119,8 +129,11 @@ def serve(config, home, progress, scope):
                     if summarize:
                         payload=dict(newSources=batch,retrievedContext=[])
                         available=model.context-1792-model.token_count(SYSTEM)-model.token_count(json.dumps(payload,ensure_ascii=False))-256
-                        payload['retrievedContext']=engine.note_context(scope,batch,model.token_count,max(0,available))
-                        result=model.generate(payload,'Writing lecture notes from RAG source passages…',maximum=1792,schema=SCHEMA,system=SYSTEM)
+                        payload['retrievedContext']=engine.note_context(scope,batch,model.token_count,max(0,available),semantic)
+                        schema=deepcopy(SCHEMA)
+                        schema['properties']['notes']['items']['properties']['passageIds'].update(
+                            minItems=1,items={'type':'string','enum':list(dict.fromkeys(s['passageId'] for s in batch))})
+                        result=model.generate(payload,'Writing lecture notes from RAG source passages…',maximum=1792,schema=schema,system=SYSTEM)
                         # No model-generated operation or retention decision is accepted.
                         try:
                             engine.complete_notes(scope,version,batch,result['notes'])
@@ -128,9 +141,10 @@ def serve(config, home, progress, scope):
                             # If background confused the writer, retry the same source span without it.
                             progress('Rewriting notes from new sources only to verify their source citations.')
                             result=model.generate(dict(newSources=batch,retrievedContext=[]),
-                                'Writing source-verified lecture notes…',maximum=1792,schema=SCHEMA,
+                                'Writing source-verified lecture notes…',maximum=1792,schema=schema,
                                 system=SYSTEM+'\nUse only newSources. Cite their passageId values exactly. Do not write notes from remembered background context.')
                             engine.complete_notes(scope,version,batch,result['notes'])
+                        semantic.sync(scope,version)
                     else:
                         result=model.generate(dict(newSources=batch),'Translating the latest foreign speech into English…',
                             maximum=1792,schema=TRANSLATE_SCHEMA,system=TRANSLATE_SYSTEM)

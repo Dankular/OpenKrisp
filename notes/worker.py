@@ -350,7 +350,14 @@ def main():
         return
     if args.command == 'context-search':
         from context_engine import ContextEngine
-        print(json.dumps(ContextEngine(home).search(args.session,args.query),ensure_ascii=False))
+        from semantic_encoder import SemanticEncoder
+        from semantic_context import SemanticContext
+        engine=ContextEngine(home)
+        with SemanticEncoder(config,home) as encoder:
+            semantic=SemanticContext(engine,encoder,progress)
+            semantic.sync(args.session,(engine.latest_checkpoint(args.session) or {}).get('notesWriter'))
+            result=semantic.retrieve(args.session,[dict(start=1e12,sourceKey='',offset=0,text=args.query)],limit=8)
+            print(json.dumps(result,ensure_ascii=False))
         return
     if args.command == 'index-library':
         from context_engine import ContextEngine

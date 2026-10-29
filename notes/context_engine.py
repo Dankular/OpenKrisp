@@ -1,7 +1,7 @@
 """Embedded, source-scoped RAG, response cache and durable context checkpoints.
 
-Iris-inspired read/recall/record flow; SQLite FTS5 retrieval, not an embedding
-similarity service. Changed facts never reuse a merely similar response.
+Iris-inspired read/recall/record flow; semantic sentence retrieval with lexical
+fallback. Changed facts never reuse a merely similar response.
 """
 import hashlib
 import json
@@ -241,11 +241,11 @@ CREATE INDEX IF NOT EXISTS note_blocks_scope ON note_blocks(scope,writer,job_key
                 else: pieces[0:0]=self.split_source(item)
         if pending: yield pending
 
-    def note_context(self, scope, sources, token_count, budget):
+    def note_context(self, scope, sources, token_count, budget, semantic=None):
         """Retrieve across the entire indexed history, with chronological coverage anchors."""
         before=min(s['start'] for s in sources)
         query=' '.join(s['text'] for s in sources)
-        ranked=self.search(scope,query,before=before,limit=8)
+        ranked=semantic.retrieve(scope,sources,limit=8) if semantic else self.search(scope,query,before=before,limit=8)
         history=self.db.execute('SELECT * FROM chunks WHERE scope=? AND end<=? ORDER BY start',(scope,before)).fetchall()
         anchors=[]
         if history:
@@ -261,20 +261,27 @@ CREATE INDEX IF NOT EXISTS note_blocks_scope ON note_blocks(scope,writer,job_key
                     at=max(0,source['offset']-1200)
                     lead_in.append(dict(start=row['start'],end=row['end'],speaker=row['speaker'],
                         text=row['text'][at:source['offset']],english='',role='sourceLeadIn',sourceOffset=at))
-        candidates=lead_in+ranked[:2]+anchors+ranked[2:]; result=[]; seen=set()
-        per_passage=max(1,budget//max(1,min(5,len(candidates))))
+        candidates=(lead_in+ranked+(anchors if len(ranked)<3 else [])) if semantic else lead_in+ranked[:2]+anchors+ranked[2:]
+        result=[]; seen=set()
+        per_passage=max(1,budget//max(1,min(4,len(candidates))))
         terms=re.findall(r'[^\W_]{4,}',query.casefold())[:24]
         for passage in candidates:
-            key=(passage['start'],passage['speaker'])
+            key=(passage.get('sourceKey',passage['start']),passage['speaker'],passage.get('excerptOffset',0))
             if key in seen: continue
             seen.add(key)
             text=passage['text']
             # Select an excerpt near matching words, rather than always truncating the start of a long passage.
             matches=[text.casefold().find(t) for t in terms if t in text.casefold()]
-            at=max(0,min(matches)-150) if matches else 0
-            item={**passage,'text':text[at:at+900],'english':passage['english'][:400],'excerptOffset':at}
+            at=passage.get('excerptOffset',0) if semantic else max(0,min(matches)-150) if matches else 0
+            item={k:v for k,v in passage.items() if k not in ('focusText','focusOffset','semanticScore','rerankScore')}
+            item.update(text=text if semantic else text[at:at+900],english=passage['english'][:400],excerptOffset=at)
+            if 'sourceKey' in item: item['sourceKey']=item['sourceKey'][:16]
             while (token_count(json.dumps(item,ensure_ascii=False))>per_passage or token_count(json.dumps(result+[item],ensure_ascii=False))>budget) and len(item['text'])>80:
-                item['text']=item['text'][:len(item['text'])//2]; item['english']=''
+                length=len(item['text'])//2; left=0
+                if passage.get('focusText'):
+                    center=passage['focusOffset']-item['excerptOffset']+len(passage['focusText'])//2
+                    left=max(0,min(len(item['text'])-length,center-length//2))
+                item['text']=item['text'][left:left+length]; item['excerptOffset']+=left; item['english']=''
             if token_count(json.dumps(result+[item],ensure_ascii=False))<=budget: result.append(item)
         return result
 
@@ -284,6 +291,8 @@ CREATE INDEX IF NOT EXISTS note_blocks_scope ON note_blocks(scope,writer,job_key
         values.update(indexedParagraphs=self.db.execute('SELECT count(*) FROM chunks').fetchone()[0],
                       retainedNotes=self.db.execute('SELECT count(*) FROM note_blocks n JOIN note_jobs j ON n.scope=j.scope AND n.writer=j.writer AND n.job_key=j.job_key WHERE j.active=1').fetchone()[0],
                       cachedResponses=self.db.execute('SELECT count(*) FROM responses').fetchone()[0])
+        if self.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='semantic_sentences'").fetchone():
+            values['semanticSentences']=self.db.execute('SELECT count(*) FROM semantic_sentences').fetchone()[0]
         temporary=self.home/f'context-status-{os.getpid()}.tmp'
         try:
             temporary.write_text(json.dumps(values),encoding='utf-8')

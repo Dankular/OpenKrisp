@@ -37,7 +37,9 @@ public sealed class LocalNotesWorker : ILocalNotesWorker
                 using var config = JsonDocument.Parse(File.ReadAllText(Path.Combine(_home, "config.json")));
                 var root = config.RootElement;
                 return root.TryGetProperty("notesBackend", out var backend) && backend.GetString() == "qwen2.5-1m"
-                    && root.TryGetProperty("contextEngineVersion",out var contextVersion) && contextVersion.GetInt32()==1
+                    && root.TryGetProperty("contextEngineVersion",out var contextVersion) && contextVersion.GetInt32()==2
+                    && root.TryGetProperty("semanticDirectory",out var semantic) && File.Exists(Path.Combine(semantic.GetString()!,"model.onnx"))
+                    && File.Exists(Path.Combine(semantic.GetString()!,"tokenizer.json"))
                     && File.Exists(root.GetProperty("titleModel").GetString()) && File.Exists(root.GetProperty("titleCli").GetString())
                     && root.TryGetProperty("asrModel", out var asrModel) && asrModel.GetString() == "parakeet-ultra"
                     && root.TryGetProperty("parakeetUltraModel", out var asr) && File.Exists(asr.GetString())

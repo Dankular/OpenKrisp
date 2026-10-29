@@ -71,8 +71,13 @@ def main():
         return
     os.environ.update(HF_HOME=str(home / "cache"), NEEDLE_TELEMETRY="0", DO_NOT_TRACK="1", HF_HUB_DISABLE_TELEMETRY="1")
     from huggingface_hub import hf_hub_download
+    from semantic_encoder import REPO as SEMANTIC_REPO, REVISION as SEMANTIC_REVISION
     model_dir = home / "models"
     model_dir.mkdir(exist_ok=True)
+    semantic_dir=model_dir/'semantic-e5-onnx'
+    for filename in ['onnx/model.onnx','onnx/tokenizer.json','onnx/config.json']:
+        print('Downloading local semantic sentence model: '+filename,flush=True)
+        hf_hub_download(SEMANTIC_REPO,filename,revision=SEMANTIC_REVISION,local_dir=semantic_dir)
     asr_dir = model_dir / "parakeet-ultra"
     for filename in [ULTRA_FILE, "LICENSE", "NOTICE"]:
         print("Downloading Parakeet Ultra GPU model: " + filename, flush=True)
@@ -114,7 +119,7 @@ def main():
                 if name in required or (name.startswith("ggml-cpu-") and name.endswith(".dll")) or name.startswith("LICENSE"):
                     (binary_dir / name).write_bytes(archive.read(member))
         archive_path.unlink()
-    config = {"notesBackend": "qwen2.5-1m", "contextEngineVersion": 1, "asrBackend": "native-cuda", "asrModel": "parakeet-ultra", "python": str(python),
+    config = {"notesBackend": "qwen2.5-1m", "contextEngineVersion": 2, "semanticDirectory":str(semantic_dir/'onnx'), "asrBackend": "native-cuda", "asrModel": "parakeet-ultra", "python": str(python),
               "parakeetUltraModel": str(asr_dir/ULTRA_FILE), "smartTurnDirectory": str(turn_dir),
               "segmentation": str(model_dir / "segmentation.onnx"), "embedding": str(model_dir / "embedding.onnx"),
               "titleModel": str(title_model), "titleCli": str(binary_dir / "llama-completion.exe"),
