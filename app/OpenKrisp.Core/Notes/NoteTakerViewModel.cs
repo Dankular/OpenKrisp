@@ -397,7 +397,7 @@ public sealed class NoteTakerViewModel : ObservableObject, IDisposable
                         return;
                     }
                     LiveSummary = update.Summary; LiveKeyPoints = update.KeyPoints; LiveTranslations = update.Translations;
-                    LiveSummaryStatus = $"{update.RetainedPoints} retained context points · summary through {TimeSpan.FromSeconds(update.ThroughSeconds):hh\\:mm\\:ss}"
+                    LiveSummaryStatus = $"{update.RetainedPoints} retained notes · notes through {TimeSpan.FromSeconds(update.ThroughSeconds):hh\\:mm\\:ss}"
                         + (update.TranslationOnly ? " · English translations updated" : " · new context added and duplicates fused")
                         + (update.CacheHit ? " · reused cached context" : "");
                     try { _store.SaveRunningNotes(meetingId, update); }

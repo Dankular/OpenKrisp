@@ -37,7 +37,7 @@ public sealed class TractRuntimeService : ObservableObject, IDisposable
                 using var data=JsonDocument.Parse(File.ReadAllText(Path.Combine(_worker.Home,"context-status.json")));
                 var root=data.RootElement;
                 int Number(string name) => root.TryGetProperty(name,out var value) ? value.GetInt32() : 0;
-                return $"Local RAG: {Number("indexedParagraphs")} indexed paragraphs · {Number("cachedResponses")} cached responses · {Number("cacheHits")} cache hits · {Number("modelCalls")} model calls. SQLite FTS retrieval; no external server.";
+                return $"Local RAG: {Number("indexedParagraphs")} indexed paragraphs · {Number("retainedNotes")} retained notes · {Number("cachedResponses")} cached responses · {Number("cacheHits")} cache hits · {Number("modelCalls")} model calls. RAG manages source coverage, revisions and retrieval; Qwen writes notes. SQLite FTS retrieval; no external server.";
             }
             catch (Exception error) when (error is IOException or JsonException or UnauthorizedAccessException)
             { return "Local RAG and context cache initialize with the next recording. Confirmed speech is indexed before summarization."; }

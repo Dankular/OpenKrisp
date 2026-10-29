@@ -49,7 +49,7 @@ internal sealed class LiveNotesSession : ILiveNotesSession
                 tail.Enqueue(line); if (tail.Count > 5) tail.Dequeue();
                 if (!_disposed) progress.Report(line.StartsWith("Loading Qwen", StringComparison.Ordinal) ? "Preparing local running notes…"
                     : line.StartsWith("Qwen ready", StringComparison.Ordinal) ? "Reading recent paragraphs…"
-                    : line.StartsWith("Adding context", StringComparison.Ordinal) ? "Adding new context and merging repeated points…"
+                    : line.StartsWith("Writing lecture notes", StringComparison.Ordinal) ? "Writing notes from retrieved transcript context…"
                     : line.StartsWith("Translating the latest", StringComparison.Ordinal) ? "Adding English translations beside the original speech…" : line);
             }
         }
